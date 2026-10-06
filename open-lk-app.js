@@ -477,7 +477,7 @@
     window.__OPEN_LK_REAL_MODE__ = false;
     window.__OPEN_LK_REAL_ACTIONS__ = null;
     sessionStorage.setItem(DEMO_KEY, "1");
-    loadUi({ demo: true, session: false, plans: [], subs: [], profile: {}, payers: [], cards: [], orders: [], tickets: [], events: [], schema: 2, clock: Date.now() });
+    loadUi({ demo: true, session: !isLoginPage(), plans: [], subs: [], profile: {}, payers: [], cards: [], orders: [], tickets: [], events: [], schema: 2, clock: Date.now() });
   };
 
   const redirectToLogin = () => {

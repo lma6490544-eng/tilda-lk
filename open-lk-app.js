@@ -452,7 +452,11 @@
       styleLink.href = CSS_URL;
       document.head.appendChild(styleLink);
     }
-    window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+    if (realState?.demo) {
+      delete window.__OPEN_LK_REAL_PLANS__;
+    } else {
+      window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+    }
 
     const script = document.createElement("script");
     script.src = UI_URL;

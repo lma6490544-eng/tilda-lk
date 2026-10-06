@@ -5,6 +5,7 @@
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
   const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css";
   const DEMO_KEY = "openLkDemoMode";
 
   const isLoginPage = () => window.location.pathname.replace(/\/$/, "") === "/login";
@@ -291,6 +292,13 @@
 
   const loadUi = (realState) => {
     window.__OPEN_LK_REAL_STATE__ = realState;
+
+    if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
+      const styleLink = document.createElement("link");
+      styleLink.rel = "stylesheet";
+      styleLink.href = CSS_URL;
+      document.head.appendChild(styleLink);
+    }
     window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
 
     const script = document.createElement("script");

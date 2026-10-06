@@ -39,6 +39,11 @@
     return result;
   };
 
+  const apiPhone = (value) => {
+    const normalized = normalizePhone(value);
+    return normalized ? `+${normalized}` : "";
+  };
+
   const request = async (method, endpoint, body, extraHeaders = {}) => {
     const token = getToken();
     const headers = {
@@ -93,7 +98,7 @@
   const auth = {
     async login({ login, password }) {
       const normalizedLogin = /^\+?\d[\d\s()\-]+$/.test(login)
-        ? normalizePhone(login)
+        ? apiPhone(login)
         : login;
       const data = await request("POST", "/auth/login", {
         login: normalizedLogin,
@@ -107,12 +112,15 @@
 
     async sendRegisterPin({ login }) {
       return request("POST", "/auth/user/phone/pin", {
-        login: normalizePhone(login),
+        login: apiPhone(login),
       });
     },
 
     async confirmRegister({ login, password, code }) {
-      const phone = normalizePhone(login);
+      if (!/^\d{6}$/.test(String(code || ""))) {
+        throw new Error("Код из SMS должен содержать 6 цифр.");
+      }
+      const phone = apiPhone(login);
       const confirmation = await request("POST", "/auth/user/phone/pin/confirm", {
         pin: code,
         login: phone,
@@ -290,7 +298,19 @@
     };
   };
 
+  const getRoute = () => {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/login") return "login";
+    if (path === "/subscriptions") return "products";
+    if (path === "/tariffs") return "subscriptions";
+    if (path === "/profile") return "settings";
+    if (path === "/help") return "help";
+    return "subscriptions";
+  };
+
   const loadUi = (realState) => {
+    window.__OPEN_LK_ROUTE__ = getRoute();
+    window.__OPEN_LK_AUTH_PAGE__ = getRoute() === "login";
     window.__OPEN_LK_REAL_STATE__ = realState;
 
     if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
@@ -319,7 +339,7 @@
   const loadDemoUi = () => {
     window.__OPEN_LK_DEMO_MODE__ = true;
     sessionStorage.setItem(DEMO_KEY, "1");
-    loadUi({ demo: true, plans: [], subs: [] });
+    loadUi({ demo: true, session: false, plans: [], subs: [], profile: {}, payers: [], cards: [], orders: [], tickets: [], events: [], schema: 2, clock: Date.now() });
   };
 
   const redirectToLogin = () => {

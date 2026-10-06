@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=18";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=18";
   const DEMO_KEY = "openLkDemoMode";
 
   const isLoginPage = () => window.location.pathname.replace(/\/$/, "") === "/login";
@@ -167,6 +167,7 @@
       );
 
       clearDemoMode();
+      window.location.replace("/subscriptions");
       return data;
     },
   };
@@ -268,9 +269,30 @@
     );
   };
 
+  auth.changePassword = async ({ oldPassword, newPassword, newPasswordConfirm }) => {
+    if (!oldPassword) throw new Error("Введите текущий пароль.");
+    if (!newPassword) throw new Error("Введите новый пароль.");
+    if (newPassword !== newPasswordConfirm) throw new Error("Пароли не совпадают.");
+    return request("PUT", "/auth/user/password", {
+      oldPassword,
+      newPassword,
+      newPasswordConfirm,
+    });
+  };
+
+  const feedbackApi = {
+    send: (message) =>
+      request("POST", "/tech-support/feedback", {
+        message: String(message || "").trim(),
+        timestamp: new Date().toISOString(),
+        source: "web",
+      }),
+  };
+
   window.__OPEN_LK_AUTH__ = auth;
   window.__OPEN_LK_SUBSCRIPTIONS__ = subscriptionsApi;
   window.__OPEN_LK_PHONE__ = { normalizePhone, formatPhone };
+  window.__OPEN_LK_FEEDBACK__ = feedbackApi;
 
   const dateMs = (value, fallback) => {
     const parsed = Date.parse(value || "");
@@ -681,6 +703,22 @@
       window.dispatchEvent(new CustomEvent("open-lk-real-state-updated", { detail: realState }));
       return realState;
     },
+    async updateProfile(profile) {
+      const user = window.__OPEN_LK_REAL_STATE__?.user || {};
+      const updated = await auth.updateUser({
+        id: user.id,
+        name: profile?.first || "",
+        surname: profile?.last || "",
+        mail: profile?.email || "",
+        phoneNumber: profile?.phone || "",
+      });
+      const realState = await refreshRealState();
+      window.dispatchEvent(new CustomEvent("open-lk-real-state-updated", { detail: realState }));
+      return updated;
+    },
+    changePassword: ({ oldPassword, newPassword, newPasswordConfirm }) =>
+      auth.changePassword({ oldPassword, newPassword, newPasswordConfirm }),
+    sendFeedback: (message) => feedbackApi.send(message),
     getSubscription: (subscriptionId) => {
       const state = window.__OPEN_LK_REAL_STATE__;
       if (!state?.organizationId) throw new Error("Не определена организация.");
@@ -739,12 +777,158 @@
     if (path === "/tariffs") return "subscriptions";
     if (path === "/profile") return "settings";
     if (path === "/help") return "help";
-    return "subscriptions";
+    return null;
+  };
+
+  const ensureKnownRoute = () => {
+    const route = getRoute();
+    if (route) return route;
+    window.location.replace(getToken() ? "/subscriptions" : "/login");
+    return null;
+  };
+
+  const logout = () => {
+    for (const key of TOKEN_KEYS) localStorage.removeItem(key);
+    sessionStorage.removeItem(DEMO_KEY);
+    window.__OPEN_LK_DEMO_MODE__ = false;
+    window.__OPEN_LK_REAL_MODE__ = false;
+    window.location.replace("/login");
+  };
+
+  window.__OPEN_LK_LOGOUT__ = logout;
+
+  const installUiGuards = () => {
+    if (window.__OPEN_LK_UI_GUARDS__) return;
+    window.__OPEN_LK_UI_GUARDS__ = true;
+
+    const isRealMode = () => Boolean(window.__OPEN_LK_REAL_MODE__);
+    const toast = (message) => {
+      let node = document.querySelector(".open-lk-guard-toast");
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "toast open-lk-guard-toast";
+        node.setAttribute("role", "status");
+        document.body.appendChild(node);
+      }
+      node.textContent = message;
+      window.clearTimeout(window.__OPEN_LK_GUARD_TOAST_TIMER__);
+      window.__OPEN_LK_GUARD_TOAST_TIMER__ = window.setTimeout(() => node.remove(), 4500);
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target.closest("button") : null;
+      if (!target) return;
+      const text = String(target.textContent || "").trim();
+      if (text === "Выйти") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        logout();
+      }
+    }, true);
+
+    document.addEventListener("submit", async (event) => {
+      if (!isRealMode()) return;
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+
+      const bodyField = form.querySelector('textarea[name="body"]');
+      const subjectField = form.querySelector('input[name="subject"]');
+      if (bodyField && subjectField && window.__OPEN_LK_REAL_ACTIONS__?.sendFeedback) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const subject = String(subjectField.value || "").trim();
+        const body = String(bodyField.value || "").trim();
+        const message = subject ? `${subject}\n\n${body}` : body;
+        try {
+          await window.__OPEN_LK_REAL_ACTIONS__.sendFeedback(message);
+          form.reset();
+          toast("Принято в работу! Спасибо, что улучшаете продукт вместе с нами!");
+          window.setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+          toast(error?.message || "Не удалось отправить обращение");
+        }
+        return;
+      }
+
+      const passwordField = form.querySelector('input[name="password"]');
+      const confirmField = form.querySelector('input[name="confirm"]');
+      if (passwordField && confirmField && window.__OPEN_LK_REAL_ACTIONS__?.changePassword) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const oldField = form.querySelector('input[name="oldPassword"]');
+        if (!oldField || !oldField.value) {
+          toast("Введите текущий пароль.");
+          return;
+        }
+        if (passwordField.value !== confirmField.value) {
+          toast("Пароли не совпадают.");
+          return;
+        }
+        try {
+          await window.__OPEN_LK_REAL_ACTIONS__.changePassword({
+            oldPassword: oldField.value,
+            newPassword: passwordField.value,
+            newPasswordConfirm: confirmField.value,
+          });
+          form.reset();
+          toast("Пароль успешно изменён.");
+          window.setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+          toast(error?.message || "Не удалось изменить пароль");
+        }
+        return;
+      }
+
+      const settingsInputs = Array.from(form.querySelectorAll('input')).filter((input) => input.type !== "checkbox");
+      if (settingsInputs.length >= 4 && form.closest(".settings-section") && window.__OPEN_LK_REAL_ACTIONS__?.updateProfile) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        try {
+          const [first, last, email, phone] = settingsInputs;
+          await window.__OPEN_LK_REAL_ACTIONS__.updateProfile({
+            first: first.value,
+            last: last.value,
+            email: email.value,
+            phone: phone.value,
+          });
+          toast("Настройки сохранены");
+          window.setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+          toast(error?.message || "Не удалось сохранить настройки");
+        }
+      }
+    }, true);
+
+    const addPasswordField = () => {
+      if (!isRealMode()) return;
+      const forms = document.querySelectorAll('form');
+      for (const form of forms) {
+        if (!(form instanceof HTMLFormElement)) continue;
+        const passwordField = form.querySelector('input[name="password"]');
+        const confirmField = form.querySelector('input[name="confirm"]');
+        if (!passwordField || !confirmField || form.querySelector('input[name="oldPassword"]')) continue;
+        const label = document.createElement("label");
+        label.className = "field";
+        const span = document.createElement("span");
+        span.textContent = "Текущий пароль";
+        const input = document.createElement("input");
+        input.type = "password";
+        input.name = "oldPassword";
+        input.required = true;
+        label.append(span, input);
+        form.insertBefore(label, passwordField.closest("label") || passwordField);
+      }
+    };
+
+    new MutationObserver(addPasswordField).observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener("open-lk-real-data", addPasswordField);
   };
 
   const loadUi = (realState) => {
-    window.__OPEN_LK_ROUTE__ = getRoute();
-    window.__OPEN_LK_AUTH_PAGE__ = getRoute() === "login";
+    const route = getRoute();
+    if (!route) return;
+    window.__OPEN_LK_ROUTE__ = route;
+    window.__OPEN_LK_AUTH_PAGE__ = route === "login";
     window.__OPEN_LK_REAL_MODE__ = Boolean(realState?.session && !realState?.demo);
     window.__OPEN_LK_REAL_ACTIONS__ = realActions;
     window.__OPEN_LK_REAL_STATE__ = realState?.demo && !isLoginPage() ? null : realState;
@@ -762,6 +946,8 @@
       window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
       window.__OPEN_LK_TARIFFS_BY_PERIOD__ = realState.tariffsByPeriod || {};
     }
+
+    installUiGuards();
 
     const script = document.createElement("script");
     script.src = UI_URL;
@@ -807,10 +993,12 @@
   };
 
   const redirectToLogin = () => {
-    if (!isLoginPage()) window.location.assign("/login");
+    if (!isLoginPage()) window.location.replace("/login");
   };
 
   const init = async () => {
+    const route = ensureKnownRoute();
+    if (!route) return;
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
@@ -834,6 +1022,10 @@
       loadUi(realState);
     } catch (error) {
       console.error("[OPEN-LK] API error:", error);
+      if (error?.status === 401 || error?.status === 403) {
+        logout();
+        return;
+      }
       const root = document.getElementById("root");
       if (root) {
         root.innerHTML = `<div style=\"padding:24px;font:16px sans-serif\">${error?.message || "Ошибка загрузки данных"}</div>`;

@@ -440,7 +440,7 @@
     window.__OPEN_LK_AUTH_PAGE__ = getRoute() === "login";
     window.__OPEN_LK_REAL_MODE__ = Boolean(realState?.session && !realState?.demo);
     window.__OPEN_LK_REAL_ACTIONS__ = realActions;
-    window.__OPEN_LK_REAL_STATE__ = realState;
+    window.__OPEN_LK_REAL_STATE__ = realState?.demo && !isLoginPage() ? null : realState;
 
     if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
       const styleLink = document.createElement("link");

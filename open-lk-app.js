@@ -148,22 +148,23 @@
       });
       saveToken(extractToken(data));
 
-      // После регистрации синхронизируем данные, которые пользователь уже ввёл в форме.
-      // ID берём с backend через /lk/user, чтобы не зависеть от формата ответа /auth/user.
       const createdUser = await request("GET", "/lk/user");
       if (!createdUser?.id) {
         throw new Error("Регистрация выполнена, но сервер не вернул id пользователя.");
       }
 
-      await request("PUT", "/lk/user", {
-        id: createdUser.id,
-        name: String(name || "").trim(),
-        surname: String(surname || "").trim(),
-        mail: String(mail || "").trim(),
-        phoneNumber: normalizePhone(phone),
-      }, {
-        "X-User-Id": createdUser.id,
-      });
+      await request(
+        "PUT",
+        "/lk/user",
+        {
+          id: createdUser.id,
+          name: String(name || "").trim(),
+          surname: String(surname || "").trim(),
+          mail: String(mail || "").trim(),
+          phoneNumber: normalizePhone(phone),
+        },
+        { "X-User-Id": createdUser.id }
+      );
 
       clearDemoMode();
       return data;
@@ -171,6 +172,8 @@
   };
 
   const subscriptionsApi = {
+    // Старые контракты, которые всё ещё используются для деталей подписки,
+    // отмены и совместимости с уже существующим UI.
     getPlans: () => request("GET", "/subscriptions/plans"),
 
     getOrganizationSubscriptions: (organizationId) =>
@@ -188,29 +191,81 @@
         `/subscriptions/organizations/${organizationId}/${subscriptionId}/cancel?actorUserId=${encodeURIComponent(actorUserId)}`
       ),
 
-    createCheckout: (payload, idempotencyKey) =>
-      request("POST", "/subscriptions/checkouts", payload, {
+    getCheckout: (organizationId, checkoutId) =>
+      request("GET", `/subscriptions/organizations/${organizationId}/checkouts/${checkoutId}`),
+
+    // Новые контракты ЛК.
+    getMySubscriptions: (organizationId, filter = "ALL") =>
+      request(
+        "GET",
+        `/subscriptions/organizations/${organizationId}/my-subscriptions?filter=${encodeURIComponent(filter)}`
+      ),
+
+    getTariffs: (organizationId, periodMonths = 1) =>
+      request(
+        "GET",
+        `/subscriptions/organizations/${organizationId}/tariffs?periodMonths=${encodeURIComponent(periodMonths)}`
+      ),
+
+    getPayerDetails: (organizationId) =>
+      request("GET", `/subscriptions/organizations/${organizationId}/payers/details`),
+
+    createPersonPayer: (organizationId, payload) =>
+      request("POST", `/subscriptions/organizations/${organizationId}/payers/person`, payload),
+
+    createCompanyPayer: (organizationId, payload) =>
+      request("POST", `/subscriptions/organizations/${organizationId}/payers/company`, payload),
+
+    getPayer: (organizationId, payerId) =>
+      request("GET", `/subscriptions/organizations/${organizationId}/payers/${payerId}`),
+
+    updatePayer: (organizationId, payerId, payload) =>
+      request("PUT", `/subscriptions/organizations/${organizationId}/payers/${payerId}`, payload),
+
+    setDefaultPayer: (organizationId, payerId) =>
+      request("PUT", `/subscriptions/organizations/${organizationId}/payers/${payerId}/default`),
+
+    listCheckouts: (organizationId, limit = 50, offset = 0) =>
+      request(
+        "GET",
+        `/subscriptions/organizations/${organizationId}/checkouts?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`
+      ),
+
+    listPayments: (organizationId, limit = 50, offset = 0) =>
+      request(
+        "GET",
+        `/subscriptions/organizations/${organizationId}/payments?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`
+      ),
+
+    quoteCartPayment: (organizationId, payload) =>
+      request("POST", `/subscriptions/organizations/${organizationId}/payment-quotes`, payload),
+
+    createCartCheckout: (organizationId, payload, idempotencyKey) =>
+      request("POST", `/subscriptions/organizations/${organizationId}/cart-checkouts`, payload, {
         "Idempotency-Key": idempotencyKey,
       }),
 
-    getCheckout: (organizationId, checkoutId) =>
-      request("GET", `/subscriptions/organizations/${organizationId}/checkouts/${checkoutId}`),
+    getCartCheckout: (organizationId, checkoutId) =>
+      request("GET", `/subscriptions/organizations/${organizationId}/cart-checkouts/${checkoutId}`),
   };
 
   auth.updateUser = async ({ id, name, surname, lastName, birthday, mail, phoneNumber }) => {
     const userId = id || (await request("GET", "/lk/user"))?.id;
     if (!userId) throw new Error("Не определён id пользователя.");
-    return request("PUT", "/lk/user", {
-      id: userId,
-      ...(name !== undefined ? { name } : {}),
-      ...(surname !== undefined ? { surname } : {}),
-      ...(lastName !== undefined ? { lastName } : {}),
-      ...(birthday !== undefined ? { birthday } : {}),
-      ...(mail !== undefined ? { mail } : {}),
-      ...(phoneNumber !== undefined ? { phoneNumber: normalizePhone(phoneNumber) } : {}),
-    }, {
-      "X-User-Id": userId,
-    });
+    return request(
+      "PUT",
+      "/lk/user",
+      {
+        id: userId,
+        ...(name !== undefined ? { name } : {}),
+        ...(surname !== undefined ? { surname } : {}),
+        ...(lastName !== undefined ? { lastName } : {}),
+        ...(birthday !== undefined ? { birthday } : {}),
+        ...(mail !== undefined ? { mail } : {}),
+        ...(phoneNumber !== undefined ? { phoneNumber: normalizePhone(phoneNumber) } : {}),
+      },
+      { "X-User-Id": userId }
+    );
   };
 
   window.__OPEN_LK_AUTH__ = auth;
@@ -222,38 +277,281 @@
     return Number.isFinite(parsed) ? parsed : fallback;
   };
 
-  const mapPlan = (plan) => ({
-    id: plan.code,
-    code: plan.code,
-    product: plan.code,
-    name: plan.code,
-    tier: plan.code,
-    price: Number(plan.priceKopeks || 0) / 100,
-    description: "",
-    features: Array.isArray(plan.features) ? plan.features : [],
-    icon: "file",
+  const normalizePayer = (payer) => ({
+    id: payer?.id || "",
+    type: payer?.type === "COMPANY" ? "company" : "person",
+    name: payer?.name || "",
+    email: payer?.email || "",
+    phone: payer?.phone || "",
+    inn: payer?.inn || "",
+    kpp: payer?.kpp || "",
+    ogrn: payer?.ogrn || "",
+    contact: payer?.contact || "",
+    address: payer?.legalAddress || payer?.address || "",
+    account: payer?.account || "",
+    bik: payer?.bik || "",
+    bank: payer?.bank || "",
+    correspondent: payer?.correspondentAccount || payer?.correspondent || "",
+    default: payer?.isDefault === true,
+    organizationId: payer?.organizationId || "",
   });
+
+  const mapTariffToPlan = (tariff) => ({
+    id: tariff?.tariffId || tariff?.tariffCode || tariff?.id || "",
+    code: tariff?.tariffCode || tariff?.tariffId || tariff?.id || "",
+    product: tariff?.product?.code || "",
+    name: tariff?.product?.name || tariff?.plan?.name || tariff?.tariffCode || "",
+    tier: tariff?.plan?.name || "",
+    price: Number(tariff?.totalAmountKopeks || 0) / 100,
+    description: tariff?.product?.description || "",
+    features: [],
+    icon: tariff?.product?.iconKey || "file",
+    tariffId: tariff?.tariffId || null,
+    tariffCode: tariff?.tariffCode || "",
+    periodMonths: tariff?.periodMonths || null,
+    regularPrice: Number(tariff?.regularAmountKopeks || 0) / 100,
+    discountAmount: Number(tariff?.discountAmountKopeks || 0) / 100,
+    discountPercent: Number(tariff?.discountPercent || 0),
+    totalAmount: Number(tariff?.totalAmountKopeks || 0) / 100,
+    priceStatus: tariff?.priceStatus || null,
+    canPurchase: tariff?.canPurchase === true,
+  });
+
+  const mapActivePlan = (item, tariffPlans) => {
+    const product = item?.product || {};
+    const plan = item?.plan || {};
+    const priceSource = tariffPlans.find(
+      (tariff) =>
+        tariff?.product?.code === product.code && tariff?.plan?.code === plan.code
+    );
+    return {
+      id: plan.code || product.code || item.subscriptionId,
+      code: plan.code || product.code || item.subscriptionId,
+      product: product.code || "",
+      name: product.name || plan.name || product.code || "",
+      tier: plan.name || "",
+      price: priceSource ? Number(priceSource.totalAmountKopeks || 0) / 100 : 0,
+      description: product.description || "",
+      features: [],
+      icon: product.iconKey || "file",
+    };
+  };
+
+  const mapSubscriptionCard = (item, activeTariffs, payers, now) => {
+    const active = activeTariffs.find((tariff) => tariff?.subscriptionId === item.subscriptionId);
+    const until = active?.currentPeriodEnd || item?.access?.until || null;
+    const start = active?.currentPeriodStart || null;
+    const end = dateMs(until, now);
+    const startMs = dateMs(start, Math.min(now, end));
+    const payerId = item?.payer?.id || "";
+    const payer = payerId ? payers.find((candidate) => candidate.id === payerId) : null;
+    const statusCode = item?.status?.code || "";
+    return {
+      id: item.subscriptionId,
+      planId: item?.plan?.code || item?.product?.code || "",
+      payerId,
+      start: startMs,
+      end,
+      months: active?.purchasedPeriodMonths || null,
+      auto: null,
+      status: statusCode || null,
+      statusLabel: item?.status?.label || "",
+      nextChargeAt: null,
+      cancelRequested: null,
+      method: null,
+      product: item?.product || null,
+      access: item?.access || null,
+      payer: payer || null,
+    };
+  };
+
+  const mapOrder = (order, payerById) => {
+    const payerId = order?.payerId || "";
+    const snapshot = order?.payerSnapshot || null;
+    const payer = payerById[payerId] || (snapshot ? normalizePayer({ ...snapshot, id: payerId }) : null);
+    const total = Number(order?.amountKopeks || 0) / 100;
+    const status = String(order?.status || "").toUpperCase();
+    const item = {
+      id: order?.id || "",
+      planId: order?.planCode || "",
+      product: order?.planCode || "",
+      planName: order?.planCode || "",
+      kind: "payment",
+      total,
+      months: null,
+      start: null,
+      end: null,
+      serviceEnd: null,
+      subId: order?.subscriptionId || null,
+      payerId,
+      payer: payer || { id: payerId, type: "person", name: "", email: "", phone: "" },
+      method: null,
+      created: order?.createdAt || null,
+      status: status === "PAID" ? "paid" : status.toLowerCase() || "unknown",
+      act: false,
+    };
+    return {
+      ...item,
+      number: order?.id || "",
+      items: [item],
+      paymentLink: order?.paymentLink || null,
+    };
+  };
 
   const loadRealState = async () => {
     const user = await request("GET", "/lk/user");
     const companies = Array.isArray(user.companies) ? user.companies : [];
     const favorite = companies.find((item) => item?.favorite) || companies[0];
     const organizationId = favorite?.company?.id || "";
-    let plans = [];
-    let plansError = null;
-    try {
-      plans = await subscriptionsApi.getPlans();
-    } catch (error) {
-      console.warn("[OPEN-LK] plans error:", error);
-      plansError = {
-        message: error?.message || "Не удалось загрузить тарифы.",
-        code: error?.code || "",
-        traceId: error?.traceId || "",
+    const now = Date.now();
+
+    if (!organizationId) {
+      return {
+        schema: 2,
+        clock: now,
+        session: true,
+        profile: {
+          first: user.name || "",
+          last: user.surname || "",
+          middle: user.lastName || "",
+          email: user.mail || "",
+          phone: user.phoneNumber ? formatPhone(user.phoneNumber) : "",
+          avatar: user.userPhoto?.[0]?.fileUrl || "",
+          ads: false,
+          news: true,
+          twoFactor: false,
+        },
+        payers: [],
+        cards: [],
+        subs: [],
+        orders: [],
+        tickets: [],
+        events: [],
+        user,
+        organizationId: "",
+        plans: [],
+        tariffsByPeriod: { 1: [], 3: [], 12: [] },
+        apiErrors: {},
       };
     }
-    const subscriptions = organizationId
-      ? await subscriptionsApi.getOrganizationSubscriptions(organizationId)
+
+    const apiErrors = {};
+    const [mySubscriptionsResult, tariffResults, payerResult, checkoutResult, paymentResult] =
+      await Promise.allSettled([
+        subscriptionsApi.getMySubscriptions(organizationId, "ALL"),
+        Promise.all([1, 3, 12].map((period) => subscriptionsApi.getTariffs(organizationId, period))),
+        subscriptionsApi.getPayerDetails(organizationId),
+        subscriptionsApi.listCheckouts(organizationId),
+        subscriptionsApi.listPayments(organizationId),
+      ]);
+
+    const mySubscriptions =
+      mySubscriptionsResult.status === "fulfilled" && mySubscriptionsResult.value
+        ? mySubscriptionsResult.value
+        : { items: [] };
+    if (mySubscriptionsResult.status === "rejected") {
+      apiErrors.mySubscriptions = {
+        message: mySubscriptionsResult.reason?.message || "Не удалось загрузить подписки.",
+        code: mySubscriptionsResult.reason?.code || "",
+        traceId: mySubscriptionsResult.reason?.traceId || "",
+      };
+    }
+
+    const tariffByPeriod = { 1: [], 3: [], 12: [] };
+    if (tariffResults.status === "fulfilled") {
+      [1, 3, 12].forEach((period, index) => {
+        tariffByPeriod[period] = tariffResults.value[index] || {};
+      });
+    } else {
+      apiErrors.tariffs = {
+        message: tariffResults.reason?.message || "Не удалось загрузить тарифы.",
+        code: tariffResults.reason?.code || "",
+        traceId: tariffResults.reason?.traceId || "",
+      };
+    }
+
+    const payerDetails =
+      payerResult.status === "fulfilled" && Array.isArray(payerResult.value)
+        ? payerResult.value.map(normalizePayer)
+        : [];
+    if (payerResult.status === "rejected") {
+      apiErrors.payers = {
+        message: payerResult.reason?.message || "Не удалось загрузить плательщиков.",
+        code: payerResult.reason?.code || "",
+        traceId: payerResult.reason?.traceId || "",
+      };
+    }
+
+    const checkoutOrders =
+      checkoutResult.status === "fulfilled" && Array.isArray(checkoutResult.value)
+        ? checkoutResult.value
+        : [];
+    const payments =
+      paymentResult.status === "fulfilled" && Array.isArray(paymentResult.value)
+        ? paymentResult.value
+        : [];
+    if (checkoutResult.status === "rejected") {
+      apiErrors.checkouts = {
+        message: checkoutResult.reason?.message || "Не удалось загрузить историю заказов.",
+        code: checkoutResult.reason?.code || "",
+        traceId: checkoutResult.reason?.traceId || "",
+      };
+    }
+    if (paymentResult.status === "rejected") {
+      apiErrors.payments = {
+        message: paymentResult.reason?.message || "Не удалось загрузить историю платежей.",
+        code: paymentResult.reason?.code || "",
+        traceId: paymentResult.reason?.traceId || "",
+      };
+    }
+
+    const tariffResponses = [1, 3, 12].map((period) => tariffByPeriod[period]);
+    const allAvailableTariffs = tariffResponses.flatMap((response) =>
+      Array.isArray(response?.availableTariffs) ? response.availableTariffs : []
+    );
+    const periodPlans = {};
+    [1, 3, 12].forEach((period) => {
+      periodPlans[period] = Array.isArray(tariffByPeriod[period]?.availableTariffs)
+        ? tariffByPeriod[period].availableTariffs.map(mapTariffToPlan)
+        : [];
+    });
+
+    const myItems = Array.isArray(mySubscriptions.items) ? mySubscriptions.items : [];
+    const activeTariffs = Array.isArray(tariffByPeriod[1]?.activeTariffs)
+      ? tariffByPeriod[1].activeTariffs
       : [];
+    const subs = myItems.map((item) => mapSubscriptionCard(item, activeTariffs, payerDetails, now));
+
+    const payerById = Object.fromEntries(payerDetails.map((payer) => [payer.id, payer]));
+    const orders = checkoutOrders.map((order) => mapOrder(order, payerById));
+    const paidPaymentsByCheckout = new Map(payments.map((payment) => [payment.checkoutId, payment]));
+    orders.forEach((order) => {
+      const payment = paidPaymentsByCheckout.get(order.id);
+      if (payment) {
+        order.status = "paid";
+        order.created = payment.paidAt || order.created;
+        order.items[0].status = "paid";
+        order.items[0].start = payment.periodStart || null;
+        order.items[0].end = payment.periodEnd || null;
+        order.items[0].serviceEnd = payment.periodEnd || null;
+        order.items[0].created = payment.paidAt || order.items[0].created;
+        order.items[0].total = Number(payment.amountKopeks || order.amountKopeks || 0) / 100;
+        order.total = order.items[0].total;
+      }
+    });
+
+    const activePlanMap = new Map();
+    myItems.forEach((item) => {
+      const tariffPlanSource = allAvailableTariffs.find(
+        (tariff) =>
+          tariff?.product?.code === item?.product?.code && tariff?.plan?.code === item?.plan?.code
+      );
+      const plan = mapActivePlan(item, tariffPlanSource ? [tariffPlanSource] : []);
+      activePlanMap.set(plan.id, plan);
+    });
+
+    const allPlans = [...activePlanMap.values(), ...Object.values(periodPlans).flat()];
+    const uniquePlans = Array.from(new Map(allPlans.map((plan) => [plan.id, plan])).values());
 
     const profile = {
       first: user.name || "",
@@ -262,93 +560,17 @@
       email: user.mail || "",
       phone: user.phoneNumber ? formatPhone(user.phoneNumber) : "",
       avatar: user.userPhoto?.[0]?.fileUrl || "",
+      ads: false,
+      news: true,
+      twoFactor: false,
     };
-
-    const now = Date.now();
-    const realSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
-    const subs = realSubscriptions.map((item) => ({
-      id: item.id,
-      planId: item.planCode,
-      payerId: item.payerUserId || user.id || "",
-      start: null,
-      end: item.paidThrough || null,
-      months: null,
-      auto: item.cancelRequested === false ? true : item.cancelRequested === true ? false : null,
-      status: item.status || null,
-      nextChargeAt: item.nextChargeAt || null,
-      cancelRequested: typeof item.cancelRequested === "boolean" ? item.cancelRequested : null,
-      method: null,
-    }));
-
-    const schedules = organizationId
-      ? await Promise.all(
-          realSubscriptions.map(async (subscription) => {
-            try {
-              return {
-                subscription,
-                schedule: await subscriptionsApi.getSchedule(organizationId, subscription.id),
-                error: null,
-              };
-            } catch (error) {
-              console.warn("[OPEN-LK] schedule error:", subscription.id, error);
-              return {
-                subscription,
-                schedule: null,
-                error: {
-                  message: error?.message || "Не удалось загрузить историю платежей.",
-                  code: error?.code || "",
-                  traceId: error?.traceId || "",
-                },
-              };
-            }
-          })
-        )
-      : [];
-
-    const scheduleErrors = schedules
-      .filter((item) => item.error)
-      .map((item) => ({ subscriptionId: item.subscription.id, ...item.error }));
-
-    const orders = schedules.flatMap(({ subscription, schedule }) => {
-      if (!schedule || !Array.isArray(schedule.confirmedPayments)) return [];
-      return schedule.confirmedPayments.map((payment) => ({
-        id: payment.paymentId,
-        number: payment.paymentId,
-        planId: schedule.planCode || subscription.planCode,
-        product: schedule.planCode || subscription.planCode,
-        planName: schedule.planCode || subscription.planCode,
-        kind: "payment",
-        total: Number(payment.amountKopeks || 0) / 100,
-        months: null,
-        start: payment.periodStart || null,
-        end: payment.periodEnd || null,
-        serviceEnd: payment.periodEnd || null,
-        subId: subscription.id,
-        payerId: subscription.payerUserId || user.id || "",
-        payer: {
-          id: subscription.payerUserId || user.id || "",
-          type: "person",
-          name: profile.first + " " + profile.last,
-          email: profile.email,
-          phone: profile.phone,
-        },
-        method: null,
-        created: payment.paidAt || null,
-        status: "paid",
-      }));
-    });
 
     return {
       schema: 2,
       clock: now,
       session: true,
-      profile: {
-        ...profile,
-        ads: false,
-        news: true,
-        twoFactor: false,
-      },
-      payers: [],
+      profile,
+      payers: payerDetails,
       cards: [],
       subs,
       orders,
@@ -356,11 +578,18 @@
       events: [],
       user,
       organizationId,
-      plans: Array.isArray(plans) ? plans.map(mapPlan) : [],
-      apiErrors: {
-        plans: plansError,
-        schedules: scheduleErrors,
-      },
+      plans: uniquePlans,
+      tariffsByPeriod: periodPlans,
+      tariffOverviewByPeriod: tariffByPeriod,
+      companies: companies.map((item) => ({
+        id: item.id,
+        companyId: item.company?.id || "",
+        name: item.company?.name || "",
+        status: item.status || "",
+        invitedAt: item.invitedAt || null,
+        favorite: item.favorite === true,
+      })),
+      apiErrors,
     };
   };
 
@@ -371,6 +600,7 @@
       delete window.__OPEN_LK_REAL_PLANS__;
     } else {
       window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+      window.__OPEN_LK_TARIFFS_BY_PERIOD__ = realState.tariffsByPeriod || {};
     }
     return realState;
   };
@@ -378,28 +608,71 @@
   const getProjectId = () =>
     window.__OPEN_LK_PROJECT_ID__ || window.__OPEN_LK_REAL_STATE__?.projectId || "";
 
-  const createRealCheckout = async ({ planCode, payerUserId, receiptEmail }) => {
-    const organizationId = window.__OPEN_LK_REAL_STATE__?.organizationId || "";
-    const projectId = getProjectId();
-    if (!organizationId) throw new Error("Не определена организация для оформления покупки.");
-    if (!planCode) throw new Error("Не выбран тариф.");
-    if (!payerUserId) throw new Error("Не определён плательщик.");
+  const normalizePayerForInput = (payer) => ({
+    type: payer?.type === "company" ? "COMPANY" : "PERSON",
+    name: String(payer?.name || "").trim(),
+    email: String(payer?.email || "").trim(),
+    ...(payer?.phone ? { phone: String(payer.phone).trim() } : {}),
+    ...(payer?.inn ? { inn: String(payer.inn).trim() } : {}),
+    ...(payer?.kpp ? { kpp: String(payer.kpp).trim() } : {}),
+    ...(payer?.ogrn ? { ogrn: String(payer.ogrn).trim() } : {}),
+    ...(payer?.contact ? { contact: String(payer.contact).trim() } : {}),
+    ...(payer?.address ? { legalAddress: String(payer.address).trim() } : {}),
+    ...(payer?.account ? { account: String(payer.account).trim() } : {}),
+    ...(payer?.bik ? { bik: String(payer.bik).trim() } : {}),
+    ...(payer?.bank ? { bank: String(payer.bank).trim() } : {}),
+    ...(payer?.correspondent ? { correspondentAccount: String(payer.correspondent).trim() } : {}),
+  });
 
-    const payload = {
-      organizationId,
-      planCode,
-      payerUserId,
-      receiptEmail: receiptEmail || "",
-    };
-    if (projectId) payload.projectId = projectId;
-
-    const checkout = await subscriptionsApi.createCheckout(payload, crypto.randomUUID());
-
-    if (!checkout?.id) {
-      throw new Error("API не вернул id оформления.");
+  const saveRealPayer = async (payer) => {
+    const state = window.__OPEN_LK_REAL_STATE__;
+    if (!state?.organizationId) throw new Error("Не определена организация.");
+    const payload = normalizePayerForInput(payer);
+    let response;
+    if (payer?.id) {
+      response = await subscriptionsApi.updatePayer(state.organizationId, payer.id, {
+        ...payload,
+        actorUserId: state.user?.id || "",
+      });
+    } else if (payload.type === "COMPANY") {
+      const { type, ...companyPayload } = payload;
+      response = await subscriptionsApi.createCompanyPayer(state.organizationId, companyPayload);
+    } else {
+      const { type, inn, kpp, ogrn, contact, legalAddress, account, bik, bank, correspondentAccount, ...personPayload } = payload;
+      response = await subscriptionsApi.createPersonPayer(state.organizationId, personPayload);
     }
+    return normalizePayer(response);
+  };
 
-    return checkout;
+  const setRealDefaultPayer = async (payerId) => {
+    const state = window.__OPEN_LK_REAL_STATE__;
+    if (!state?.organizationId) throw new Error("Не определена организация.");
+    const response = await subscriptionsApi.setDefaultPayer(state.organizationId, payerId);
+    return normalizePayer(response);
+  };
+
+  const createRealCartCheckout = async ({ items, payerId }) => {
+    const organizationId = window.__OPEN_LK_REAL_STATE__?.organizationId || "";
+    if (!organizationId) throw new Error("Не определена организация для оформления покупки.");
+    if (!payerId) throw new Error("Не выбран плательщик.");
+    if (!Array.isArray(items) || !items.length) throw new Error("Не выбраны тарифы.");
+
+    const tariffIds = items.map((item) => item.tariffId || item.planId).filter(Boolean);
+    if (!tariffIds.length) throw new Error("Не удалось определить выбранные тарифы.");
+
+    const quote = await subscriptionsApi.quoteCartPayment(organizationId, {
+      tariffIds,
+      payerId,
+    });
+    if (!quote?.quoteId) throw new Error("API не вернул quoteId расчёта.");
+
+    const checkout = await subscriptionsApi.createCartCheckout(
+      organizationId,
+      { quoteId: quote.quoteId },
+      crypto.randomUUID()
+    );
+    if (!checkout?.id) throw new Error("API не вернул id оформления.");
+    return { quote, checkout };
   };
 
   const realActions = {
@@ -421,11 +694,41 @@
       await this.refresh();
       return response;
     },
-    createCheckout: createRealCheckout,
+    getMySubscriptions: (filter = "ALL") => {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.getMySubscriptions(state.organizationId, filter);
+    },
+    getTariffs: (periodMonths = 1) => {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.getTariffs(state.organizationId, periodMonths);
+    },
+    getPayers: () => {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.getPayerDetails(state.organizationId);
+    },
+    savePayer: saveRealPayer,
+    setDefaultPayer: setRealDefaultPayer,
+    quoteCartPayment: async ({ tariffIds, payerId }) => {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.quoteCartPayment(state.organizationId, { tariffIds, payerId });
+    },
+    createCartCheckout: createRealCartCheckout,
     async getCheckout(checkoutId) {
       const organizationId = window.__OPEN_LK_REAL_STATE__?.organizationId || "";
       if (!organizationId) throw new Error("Не определена организация.");
-      return subscriptionsApi.getCheckout(organizationId, checkoutId);
+      return subscriptionsApi.getCartCheckout(organizationId, checkoutId);
+    },
+    createCheckout: async ({ planCode, payerUserId, receiptEmail }) => {
+      // Совместимость для старых UI-вызовов. Новая реальная покупка должна идти через корзину.
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      const payer = state.payers.find((item) => item.id === payerUserId) || state.payers.find((item) => item.default);
+      if (!payer) throw new Error("Не выбран плательщик.");
+      return createRealCartCheckout({ items: [{ planId: planCode }], payerId: payer.id });
     },
   };
 
@@ -454,8 +757,10 @@
     }
     if (realState?.demo) {
       delete window.__OPEN_LK_REAL_PLANS__;
+      delete window.__OPEN_LK_TARIFFS_BY_PERIOD__;
     } else {
       window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+      window.__OPEN_LK_TARIFFS_BY_PERIOD__ = realState.tariffsByPeriod || {};
     }
 
     const script = document.createElement("script");
@@ -485,7 +790,20 @@
     window.__OPEN_LK_REAL_MODE__ = false;
     window.__OPEN_LK_REAL_ACTIONS__ = null;
     sessionStorage.setItem(DEMO_KEY, "1");
-    loadUi({ demo: true, session: !isLoginPage(), plans: [], subs: [], profile: {}, payers: [], cards: [], orders: [], tickets: [], events: [], schema: 2, clock: Date.now() });
+    loadUi({
+      demo: true,
+      session: !isLoginPage(),
+      plans: [],
+      subs: [],
+      profile: {},
+      payers: [],
+      cards: [],
+      orders: [],
+      tickets: [],
+      events: [],
+      schema: 2,
+      clock: Date.now(),
+    });
   };
 
   const redirectToLogin = () => {

@@ -1,5 +1,28 @@
-# Open LK — Tilda / GitHub package v15
+# Open LK — Tilda / GitHub package v17
 
-Исправлена маршрутизация основных разделов кабинета: кнопки верхней навигации теперь переходят на реальные Tilda URL `/subscriptions`, `/tariffs`, `/profile`, `/help`, а не меняют только внутреннее состояние React. Благодаря этому URL браузера всегда соответствует отображаемому разделу, и кнопки Back/Forward браузера работают по реальной истории страниц.
+Интеграция личного кабинета с обновлённым OpenAPI-контрактом подписок.
 
-Остальная логика и дизайн не изменялись.
+## Новые контракты
+
+Подключены:
+- `GET /subscriptions/organizations/{organizationId}/my-subscriptions`
+- `GET /subscriptions/organizations/{organizationId}/tariffs?periodMonths=...`
+- `GET /subscriptions/organizations/{organizationId}/payers/details`
+- `POST /subscriptions/organizations/{organizationId}/payers/person`
+- `POST /subscriptions/organizations/{organizationId}/payers/company`
+- `GET /subscriptions/organizations/{organizationId}/payers/{payerId}`
+- `PUT /subscriptions/organizations/{organizationId}/payers/{payerId}`
+- `PUT /subscriptions/organizations/{organizationId}/payers/{payerId}/default`
+- `GET /subscriptions/organizations/{organizationId}/checkouts`
+- `GET /subscriptions/organizations/{organizationId}/payments`
+- `POST /subscriptions/organizations/{organizationId}/payment-quotes`
+- `POST /subscriptions/organizations/{organizationId}/cart-checkouts`
+- `GET /subscriptions/organizations/{organizationId}/cart-checkouts/{checkoutId}`
+
+## Что осталось на старых контрактах
+
+Старые endpoint'ы сохранены только там, где обновлённый контракт их не заменяет в текущем UI: получение деталей конкретной подписки, отмена подписки и график платежей.
+
+Демо-режим сохранён отдельно и не использует реальные API-операции.
+
+Tilda HTML-страницы в архив не входят: `/login`, `/subscriptions`, `/tariffs`, `/profile`, `/help` остаются отдельными страницами Tilda.

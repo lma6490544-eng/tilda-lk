@@ -170,18 +170,6 @@
     },
   };
 
-  const techSupportApi = {
-    getFeedback: () => request("GET", "/tech-support/feedback"),
-    createFeedback: ({ message, timestamp, source }) => {
-      const params = new URLSearchParams({
-        message: String(message || ""),
-        timestamp: String(timestamp || new Date().toISOString()),
-        source: String(source || "web"),
-      });
-      return request("POST", `/tech-support/feedback?${params.toString()}`);
-    },
-  };
-
   const subscriptionsApi = {
     getPlans: () => request("GET", "/subscriptions/plans"),
 
@@ -209,17 +197,6 @@
       request("GET", `/subscriptions/organizations/${organizationId}/checkouts/${checkoutId}`),
   };
 
-  auth.changePassword = async ({ oldPassword, newPassword, newPasswordConfirm }) => {
-    if (!oldPassword) throw new Error("Введите старый пароль.");
-    if (!newPassword) throw new Error("Введите новый пароль.");
-    if (newPassword !== newPasswordConfirm) throw new Error("Новые пароли не совпадают.");
-    return request("PUT", "/auth/user/password", {
-      oldPassword,
-      newPassword,
-      newPasswordConfirm,
-    });
-  };
-
   auth.updateUser = async ({ id, name, surname, lastName, birthday, mail, phoneNumber }) => {
     const userId = id || (await request("GET", "/lk/user"))?.id;
     if (!userId) throw new Error("Не определён id пользователя.");
@@ -238,7 +215,6 @@
 
   window.__OPEN_LK_AUTH__ = auth;
   window.__OPEN_LK_SUBSCRIPTIONS__ = subscriptionsApi;
-  window.__OPEN_LK_TECH_SUPPORT__ = techSupportApi;
   window.__OPEN_LK_PHONE__ = { normalizePhone, formatPhone };
 
   const dateMs = (value, fallback) => {
@@ -278,35 +254,6 @@
     const subscriptions = organizationId
       ? await subscriptionsApi.getOrganizationSubscriptions(organizationId)
       : [];
-
-    let feedback = [];
-    let feedbackError = null;
-    try {
-      const response = await techSupportApi.getFeedback();
-      const list = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.items)
-          ? response.items
-          : Array.isArray(response?.content)
-            ? response.content
-            : Array.isArray(response?.data)
-              ? response.data
-              : [];
-      feedback = list.map((item) => ({
-        id: item?.id ?? "",
-        subject: item?.subject || item?.title || "Обратная связь",
-        body: item?.message || item?.body || item?.text || "",
-        date: item?.timestamp || item?.createdAt || item?.created || null,
-        status: item?.status || null,
-      }));
-    } catch (error) {
-      console.warn("[OPEN-LK] feedback error:", error);
-      feedbackError = {
-        message: error?.message || "Не удалось загрузить обращения.",
-        code: error?.code || "",
-        traceId: error?.traceId || "",
-      };
-    }
 
     const profile = {
       first: user.name || "",
@@ -405,7 +352,7 @@
       cards: [],
       subs,
       orders,
-      tickets: feedback,
+      tickets: [],
       events: [],
       user,
       organizationId,
@@ -413,7 +360,6 @@
       apiErrors: {
         plans: plansError,
         schedules: scheduleErrors,
-        feedback: feedbackError,
       },
     };
   };
@@ -462,19 +408,6 @@
       const state = window.__OPEN_LK_REAL_STATE__;
       if (!state?.organizationId) throw new Error("Не определена организация.");
       return subscriptionsApi.getSubscription(state.organizationId, subscriptionId);
-    },
-    async createFeedback({ message }) {
-      const response = await techSupportApi.createFeedback({
-        message,
-        timestamp: new Date().toISOString(),
-        source: "web",
-      });
-      await this.refresh();
-      return response;
-    },
-    async changePassword({ oldPassword, newPassword, newPasswordConfirm }) {
-      const response = await auth.changePassword({ oldPassword, newPassword, newPasswordConfirm });
-      return response;
     },
     async cancelSubscription(subscriptionId) {
       const state = window.__OPEN_LK_REAL_STATE__;
@@ -532,7 +465,14 @@
     document.head.appendChild(script);
   };
 
+  const openDemo = () => {
+    sessionStorage.setItem(DEMO_KEY, "1");
+    window.__OPEN_LK_DEMO_MODE__ = true;
+    window.location.assign("/subscriptions");
+  };
+
   const loadDemoUi = () => {
+    window.__OPEN_LK_OPEN_DEMO__ = openDemo;
     window.__OPEN_LK_DEMO_MODE__ = true;
     window.__OPEN_LK_REAL_MODE__ = false;
     window.__OPEN_LK_REAL_ACTIONS__ = null;

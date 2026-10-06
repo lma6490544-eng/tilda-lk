@@ -1,169 +1,188 @@
-/* OPEN-LK Tilda entry point — no build step required.
- * Demo mode: when there is no auth token, the original demo UI is loaded unchanged.
- * Real mode: API data is loaded first, then the same UI is mounted with API-backed initial state.
- */
 (function () {
-  'use strict';
+  "use strict";
 
-  var API_BASE = 'https://itprorab.metasymbiont.com/api/v1';
-  var PLATFORM_VERSION = 'web-1.0.0';
-  var TOKEN_KEYS = ['tildaAuthToken', 'authToken'];
-  var UI_URL = 'https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js';
+  const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
+  const PLATFORM_VERSION = "web-1.0.0";
+  const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js";
 
-  function token() {
-    for (var i = 0; i < TOKEN_KEYS.length; i++) {
-      try {
-        var value = localStorage.getItem(TOKEN_KEYS[i]);
-        if (value) return value;
-      } catch (_) {}
+  const getToken = () => {
+    for (const key of TOKEN_KEYS) {
+      const value = localStorage.getItem(key);
+      if (value) return value;
     }
-    return '';
-  }
+    return "";
+  };
 
-  function request(path, options) {
-    options = options || {};
-    var headers = Object.assign({
-      accept: 'application/json',
-      'x-platform-version': PLATFORM_VERSION
-    }, options.headers || {});
-    var t = token();
-    if (t) headers.Authorization = 'Bearer ' + t;
-    return fetch(API_BASE + path, Object.assign({}, options, { headers: headers })).then(function (r) {
-      if (!r.ok) return r.text().then(function (body) {
-        throw new Error('API ' + r.status + ': ' + (body || r.statusText));
+  const request = async (method, endpoint, body) => {
+    const token = getToken();
+    const headers = {
+      accept: "application/json",
+      "x-platform-version": PLATFORM_VERSION,
+    };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+
+    const text = await response.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error || data?.message || data?.detail || `Ошибка API: ${response.status}`
+      );
+    }
+    return data;
+  };
+
+  const extractToken = (data) =>
+    typeof data === "string"
+      ? data
+      : data?.token ||
+        data?.access_token ||
+        data?.data?.token ||
+        data?.data?.access_token ||
+        data?.result?.token ||
+        data?.result?.access_token ||
+        "";
+
+  const saveToken = (token) => {
+    if (!token) throw new Error("Сервер не вернул token");
+    localStorage.setItem("tildaAuthToken", token);
+    localStorage.setItem("authToken", token);
+  };
+
+  const auth = {
+    async login({ login, password }) {
+      const data = await request("POST", "/auth/login", { login, password, phone: "" });
+      saveToken(extractToken(data));
+      return data;
+    },
+
+    async sendRegisterPin({ login }) {
+      return request("POST", "/auth/user/phone/pin", { login });
+    },
+
+    async confirmRegister({ login, password, code }) {
+      const confirmation = await request("POST", "/auth/user/phone/pin/confirm", {
+        pin: code,
+        login,
       });
-      return r.status === 204 ? null : r.json();
-    });
-  }
 
-  function dateMs(value, fallback) {
-    var n = Date.parse(value || '');
-    return Number.isFinite(n) ? n : fallback;
-  }
+      if (confirmation?.status && confirmation.status !== "PHONE_CONFIRMED") {
+        throw new Error("Телефон не подтверждён.");
+      }
 
-  function planMap(plans) {
-    var map = {};
-    (Array.isArray(plans) ? plans : []).forEach(function (p) {
-      map[p.code] = {
-        id: p.code,
-        product: p.code,
-        name: p.code,
-        tier: '',
-        price: Number(p.priceKopeks || 0) / 100,
-        description: '',
-        features: Array.isArray(p.features) ? p.features : [],
-        icon: 'file'
-      };
-    });
-    return map;
-  }
+      const data = await request("POST", "/auth/user", {
+        login,
+        password,
+        politicAgreements: true,
+        hash: crypto.randomUUID(),
+      });
+      saveToken(extractToken(data));
+      return data;
+    },
+  };
 
-  function makeState(user, subscriptions, plans) {
-    var now = Date.now();
-    var companies = Array.isArray(user.companies) ? user.companies : [];
-    var favorite = companies.find(function (x) { return x && x.favorite; }) || companies[0];
-    var organizationId = favorite && favorite.company && favorite.company.id;
-    var profile = {
-      first: user.name || '',
-      last: user.surname || '',
-      email: user.mail || '',
-      phone: user.phoneNumber || '',
-      ads: false,
-      news: false,
-      twoFactor: false
+  window.__OPEN_LK_AUTH__ = auth;
+
+  const dateMs = (value, fallback) => {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const loadRealState = async () => {
+    const user = await request("GET", "/lk/user");
+    const companies = Array.isArray(user.companies) ? user.companies : [];
+    const favorite = companies.find((item) => item?.favorite) || companies[0];
+    const organizationId = favorite?.company?.id || "";
+    const plans = await request("GET", "/subscriptions/plans");
+    const subscriptions = organizationId
+      ? await request(`/subscriptions/organizations/${organizationId}`)
+      : [];
+
+    const profile = {
+      first: user.name || "",
+      last: user.surname || "",
+      middle: user.lastName || "",
+      email: user.mail || "",
+      phone: user.phoneNumber || "",
+      avatar: user.userPhoto?.[0]?.fileUrl || "",
     };
-    var payerId = user.id || '';
-    var payer = {
-      id: payerId,
-      type: 'person',
-      name: [user.name, user.surname, user.lastName].filter(Boolean).join(' '),
-      email: user.mail || '',
-      phone: user.phoneNumber || '',
-      default: true
-    };
-    var subs = (Array.isArray(subscriptions) ? subscriptions : []).map(function (s) {
-      var start = dateMs(s.paidThrough, now);
-      var end = dateMs(s.paidThrough, now);
-      return {
-        id: s.id,
-        planId: s.planCode,
-        payerId: s.payerUserId || payerId,
-        start: start,
-        end: end,
-        months: 1,
-        auto: !s.cancelRequested,
-        method: 'card',
-        cardId: undefined
-      };
-    });
+
+    const now = Date.now();
+    const subs = (Array.isArray(subscriptions) ? subscriptions : []).map((item) => ({
+      id: item.id,
+      planId: item.planCode,
+      payerId: item.payerUserId || user.id || "",
+      start: dateMs(item.paidThrough, now),
+      end: dateMs(item.paidThrough, now),
+      auto: !item.cancelRequested,
+      status: item.status,
+      nextChargeAt: item.nextChargeAt,
+    }));
+
     return {
-      schema: 2,
-      clock: now,
-      session: true,
-      profile: profile,
-      payers: [payer],
-      cards: [],
-      subs: subs,
-      orders: [],
-      tickets: [],
-      events: [],
-      __real: true,
-      __organizationId: organizationId || '',
-      __userId: user.id || ''
+      user,
+      profile,
+      organizationId,
+      subs,
+      plans: Array.isArray(plans) ? plans : [],
     };
-  }
+  };
 
-  function loadScript(src) {
-    return new Promise(function (resolve, reject) {
-      var s = document.createElement('script');
-      s.src = src;
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
+  const loadUi = (realState) => {
+    window.__OPEN_LK_REAL_STATE__ = realState;
+    window.__OPEN_LK_REAL_PLANS__ = realState.plans;
 
-  function mountDemo() {
-    return loadScript(UI_URL);
-  }
+    const script = document.createElement("script");
+    script.src = UI_URL;
+    script.async = false;
+    script.onload = () => {
+      window.dispatchEvent(new CustomEvent("open-lk-real-data", { detail: realState }));
+    };
+    script.onerror = () => {
+      const root = document.getElementById("root");
+      if (root) {
+        root.innerHTML = "<div style=\"padding:24px;font:16px sans-serif\">Не удалось загрузить интерфейс кабинета.</div>";
+      }
+    };
+    document.head.appendChild(script);
+  };
 
-  function mountReal() {
-    return Promise.all([
-      request('/lk/user'),
-      request('/subscriptions/plans')
-    ]).then(function (base) {
-      var user = base[0];
-      var plans = base[1];
-      var companies = Array.isArray(user.companies) ? user.companies : [];
-      var favorite = companies.find(function (x) { return x && x.favorite; }) || companies[0];
-      var organizationId = favorite && favorite.company && favorite.company.id;
-      if (!organizationId) throw new Error('Не удалось определить organizationId из /lk/user');
-      return request('/subscriptions/organizations/' + encodeURIComponent(organizationId)).then(function (subscriptions) {
-        globalThis.__OPEN_LK_REAL_PLANS__ = Object.values(planMap(plans));
-        globalThis.__OPEN_LK_REAL_STATE__ = makeState(user, subscriptions, plans);
-        return loadScript(UI_URL);
-      });
-    });
-  }
+  const loadDemoUi = () => loadUi({ demo: true, plans: [], subs: [] });
 
-  function showError(error) {
-    var root = document.getElementById('root');
-    if (!root) return;
-    root.innerHTML = '';
-    var box = document.createElement('div');
-    box.style.cssText = 'font-family:Arial,sans-serif;padding:40px;max-width:720px;margin:auto';
-    var title = document.createElement('h2');
-    title.textContent = 'Не удалось загрузить данные кабинета';
-    var text = document.createElement('p');
-    text.textContent = error && error.message ? error.message : 'Ошибка API';
-    box.appendChild(title);
-    box.appendChild(text);
-    root.appendChild(box);
-  }
+  const init = async () => {
+    if (!getToken()) {
+      loadDemoUi();
+      return;
+    }
 
-  if (token()) {
-    mountReal().catch(showError);
+    try {
+      const realState = await loadRealState();
+      loadUi(realState);
+    } catch (error) {
+      console.error("[OPEN-LK] API error:", error);
+      const root = document.getElementById("root");
+      if (root) {
+        root.innerHTML = `<div style=\"padding:24px;font:16px sans-serif\">${error?.message || "Ошибка загрузки данных"}</div>`;
+      }
+    }
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
-    mountDemo().catch(showError);
+    init();
   }
 })();

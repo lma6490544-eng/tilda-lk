@@ -1,35 +1,26 @@
-# OPEN-LK — GitHub Pages package for Tilda
+# OPEN-LK — GitHub Pages
 
-Это готовый пакет без npm, сборки и дополнительных действий в Tilda.
+Готовые файлы для GitHub Pages. Сборка/npm не нужны.
 
-## Что загрузить в GitHub
+## Файлы
+- `open-lk-app.js` — единственная точка подключения из Tilda.
+- `open-lk-ui.js` — текущий React-интерфейс.
 
-Загрузить оба файла в корень репозитория:
+## Tilda
+Подключать только:
+`https://lma6490544-eng.github.io/tilda-lk/open-lk-app.js`
 
-- `open-lk-app.js` — единственная точка входа, которую подключает Tilda.
-- `open-lk-ui.js` — текущий UI-прототип.
+## Реальная авторизация
+- POST `/v1/auth/login`
+- POST `/v1/auth/user/phone/pin`
+- POST `/v1/auth/user/phone/pin/confirm`
+- POST `/v1/auth/user`
+- GET `/v1/lk/user`
 
-GitHub Pages должен публиковать корень репозитория.
+После успешной авторизации token сохраняется в `tildaAuthToken` и `authToken`, после чего данные кабинета загружаются с API.
 
-## Что оставить в Tilda
+Демо без регистрации остаётся доступным только через кнопку открытия демо.
 
-В каждом T123:
+Пароль в интерфейсе больше не ограничен `minLength=8`.
 
-```html
-<div id="root"></div>
-<script src="https://lma6490544-eng.github.io/tilda-lk/open-lk-app.js"></script>
-```
-
-## Режимы
-
-- Без авторизационного токена запускается текущий demo UI.
-- При наличии `tildaAuthToken` или `authToken` сначала запрашиваются реальные `/lk/user`, `/subscriptions/plans` и `/subscriptions/organizations/{organizationId}`.
-- При ошибке API demo-данные не подставляются.
-- `x-platform-version: web-1.0.0` отправляется всегда.
-- `X-Subscribe-Service-Token` из браузера не отправляется.
-
-## Важно
-
-Этот вариант специально не добавляет новый UI и не меняет Tilda-страницы. Он использует предоставленные backend-контракты для первичной загрузки профиля, тарифов и подписок.
-
-Checkout/платёжные действия, payer CRUD, чеки и уведомления не имитируются реальными данными, пока для них не хватает предоставленных контрактов/данных (в частности полного ответа POST checkout и projectId).
+`X-Subscribe-Service-Token` из браузера не отправляется.

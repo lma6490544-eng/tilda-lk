@@ -367,7 +367,11 @@
   const refreshRealState = async () => {
     const realState = await loadRealState();
     window.__OPEN_LK_REAL_STATE__ = realState;
-    window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+    if (realState?.demo) {
+      delete window.__OPEN_LK_REAL_PLANS__;
+    } else {
+      window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+    }
     return realState;
   };
 

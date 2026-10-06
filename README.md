@@ -1,26 +1,41 @@
-# OPEN-LK — GitHub Pages
+# OPEN-LK — GitHub files for Tilda
 
-Готовые файлы для GitHub Pages. Сборка/npm не нужны.
+Загрузить все файлы этой папки в репозиторий GitHub Pages `tilda-lk`.
 
 ## Файлы
-- `open-lk-app.js` — единственная точка подключения из Tilda.
-- `open-lk-ui.js` — текущий React-интерфейс.
+
+- `open-lk-app.js` — входная точка для Tilda, API, авторизация, регистрация, загрузка реальных данных.
+- `open-lk-ui.js` — текущий UI кабинета.
+- `T123-login.html` — содержимое блока T123 для отдельной страницы Tilda `/login`.
 
 ## Tilda
-Подключать только:
-`https://lma6490544-eng.github.io/tilda-lk/open-lk-app.js`
 
-## Реальная авторизация
-- POST `/v1/auth/login`
-- POST `/v1/auth/user/phone/pin`
-- POST `/v1/auth/user/phone/pin/confirm`
-- POST `/v1/auth/user`
-- GET `/v1/lk/user`
+Для страницы `/login`:
 
-После успешной авторизации token сохраняется в `tildaAuthToken` и `authToken`, после чего данные кабинета загружаются с API.
+1. Создать страницу Tilda с URL `/login`.
+2. Добавить блок T123.
+3. Вставить содержимое `T123-login.html`.
+4. Отключить шапку и подвал Tilda для этой страницы.
 
-Демо без регистрации остаётся доступным только через кнопку открытия демо.
+Остальные страницы продолжают подключать `open-lk-app.js` как раньше.
 
-Пароль в интерфейсе больше не ограничен `minLength=8`.
+## Сейчас подключено
 
-`X-Subscribe-Service-Token` из браузера не отправляется.
+- `POST /v1/auth/login`
+- `POST /v1/auth/user/phone/pin`
+- `POST /v1/auth/user/phone/pin/confirm`
+- `POST /v1/auth/user`
+- `GET /v1/lk/user`
+- `GET /v1/subscriptions/plans`
+- `GET /v1/subscriptions/organizations/{organizationId}`
+- `GET /v1/subscriptions/organizations/{organizationId}/{subscriptionId}`
+- `GET /v1/subscriptions/organizations/{organizationId}/{subscriptionId}/schedule`
+- `POST /v1/subscriptions/organizations/{organizationId}/{subscriptionId}/cancel`
+- `POST /v1/subscriptions/checkouts`
+- `GET /v1/subscriptions/organizations/{organizationId}/checkouts/{checkoutId}`
+
+Сервисный `X-Subscribe-Service-Token` на фронтенде не используется.
+
+## Demo
+
+Demo остаётся отдельным сценарием без регистрации. Для обычных страниц без авторизации пользователь направляется на `/login`.

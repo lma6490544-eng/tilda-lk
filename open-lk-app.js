@@ -126,7 +126,7 @@
       });
     },
 
-    async confirmRegister({ login, password, code }) {
+    async confirmRegister({ login, password, code, name, surname, mail }) {
       if (!/^\d{6}$/.test(String(code || ""))) {
         throw new Error("Код из SMS должен содержать 6 цифр.");
       }
@@ -147,6 +147,24 @@
         hash: crypto.randomUUID(),
       });
       saveToken(extractToken(data));
+
+      // После регистрации синхронизируем данные, которые пользователь уже ввёл в форме.
+      // ID берём с backend через /lk/user, чтобы не зависеть от формата ответа /auth/user.
+      const createdUser = await request("GET", "/lk/user");
+      if (!createdUser?.id) {
+        throw new Error("Регистрация выполнена, но сервер не вернул id пользователя.");
+      }
+
+      await request("PUT", "/lk/user", {
+        id: createdUser.id,
+        name: String(name || "").trim(),
+        surname: String(surname || "").trim(),
+        mail: String(mail || "").trim(),
+        phoneNumber: normalizePhone(phone),
+      }, {
+        "X-User-Id": createdUser.id,
+      });
+
       clearDemoMode();
       return data;
     },
@@ -177,6 +195,22 @@
 
     getCheckout: (organizationId, checkoutId) =>
       request("GET", `/subscriptions/organizations/${organizationId}/checkouts/${checkoutId}`),
+  };
+
+  auth.updateUser = async ({ id, name, surname, lastName, birthday, mail, phoneNumber }) => {
+    const userId = id || (await request("GET", "/lk/user"))?.id;
+    if (!userId) throw new Error("Не определён id пользователя.");
+    return request("PUT", "/lk/user", {
+      id: userId,
+      ...(name !== undefined ? { name } : {}),
+      ...(surname !== undefined ? { surname } : {}),
+      ...(lastName !== undefined ? { lastName } : {}),
+      ...(birthday !== undefined ? { birthday } : {}),
+      ...(mail !== undefined ? { mail } : {}),
+      ...(phoneNumber !== undefined ? { phoneNumber: normalizePhone(phoneNumber) } : {}),
+    }, {
+      "X-User-Id": userId,
+    });
   };
 
   window.__OPEN_LK_AUTH__ = auth;

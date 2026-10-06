@@ -8,7 +8,7 @@
   var API_BASE = 'https://itprorab.metasymbiont.com/api/v1';
   var PLATFORM_VERSION = 'web-1.0.0';
   var TOKEN_KEYS = ['tildaAuthToken', 'authToken'];
-  var UI_URL = './open-lk-ui.js';
+  var UI_URL = 'https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js';
 
   function token() {
     for (var i = 0; i < TOKEN_KEYS.length; i++) {

@@ -39,3 +39,14 @@
 ## Demo
 
 Demo остаётся отдельным сценарием без регистрации. Для обычных страниц без авторизации пользователь направляется на `/login`.
+
+
+## Реальные subscription actions
+
+Подключены к реальному режиму кабинета:
+- `GET /v1/subscriptions/organizations/{organizationId}/{subscriptionId}` — при открытии управления подпиской.
+- `POST /v1/subscriptions/organizations/{organizationId}/{subscriptionId}/cancel` — отмена автопродления; после ответа состояние перечитывается из API.
+- `POST /v1/subscriptions/checkouts` — создание checkout для выбранного тарифа.
+- `GET /v1/subscriptions/organizations/{organizationId}/checkouts/{checkoutId}` — получение результата checkout и `paymentLink`.
+
+Для checkout backend требует `projectId`. В текущем пакете он не придумывается и не берётся из `organizationId`: если backend действительно требует его, перед загрузкой приложения должен быть задан `window.__OPEN_LK_PROJECT_ID__`.

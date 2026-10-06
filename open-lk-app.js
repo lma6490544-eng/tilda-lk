@@ -69,9 +69,19 @@
     }
 
     if (!response.ok) {
-      throw new Error(
-        data?.error || data?.message || data?.detail || `Ошибка API: ${response.status}`
-      );
+      const apiMessage =
+        data?.errorCause ||
+        data?.message ||
+        data?.detail ||
+        data?.error ||
+        `Ошибка API: ${response.status}`;
+      const apiCode = data?.errorCode ? ` (${data.errorCode})` : "";
+      const error = new Error(`${apiMessage}${apiCode}`);
+      error.status = response.status;
+      error.code = data?.errorCode || "";
+      error.traceId = data?.traceId || "";
+      error.apiResponse = data;
+      throw error;
     }
     return data;
   };
@@ -196,10 +206,16 @@
     const favorite = companies.find((item) => item?.favorite) || companies[0];
     const organizationId = favorite?.company?.id || "";
     let plans = [];
+    let plansError = null;
     try {
       plans = await subscriptionsApi.getPlans();
     } catch (error) {
       console.warn("[OPEN-LK] plans error:", error);
+      plansError = {
+        message: error?.message || "Не удалось загрузить тарифы.",
+        code: error?.code || "",
+        traceId: error?.traceId || "",
+      };
     }
     const subscriptions = organizationId
       ? await subscriptionsApi.getOrganizationSubscriptions(organizationId)
@@ -220,14 +236,14 @@
       id: item.id,
       planId: item.planCode,
       payerId: item.payerUserId || user.id || "",
-      start: now,
-      end: dateMs(item.paidThrough, now),
-      months: 1,
-      auto: !item.cancelRequested,
-      status: item.status,
-      nextChargeAt: item.nextChargeAt,
-      cancelRequested: Boolean(item.cancelRequested),
-      method: "",
+      start: null,
+      end: item.paidThrough || null,
+      months: null,
+      auto: item.cancelRequested === false ? true : item.cancelRequested === true ? false : null,
+      status: item.status || null,
+      nextChargeAt: item.nextChargeAt || null,
+      cancelRequested: typeof item.cancelRequested === "boolean" ? item.cancelRequested : null,
+      method: null,
     }));
 
     const schedules = organizationId
@@ -237,14 +253,27 @@
               return {
                 subscription,
                 schedule: await subscriptionsApi.getSchedule(organizationId, subscription.id),
+                error: null,
               };
             } catch (error) {
               console.warn("[OPEN-LK] schedule error:", subscription.id, error);
-              return { subscription, schedule: null };
+              return {
+                subscription,
+                schedule: null,
+                error: {
+                  message: error?.message || "Не удалось загрузить историю платежей.",
+                  code: error?.code || "",
+                  traceId: error?.traceId || "",
+                },
+              };
             }
           })
         )
       : [];
+
+    const scheduleErrors = schedules
+      .filter((item) => item.error)
+      .map((item) => ({ subscriptionId: item.subscription.id, ...item.error }));
 
     const orders = schedules.flatMap(({ subscription, schedule }) => {
       if (!schedule || !Array.isArray(schedule.confirmedPayments)) return [];
@@ -256,10 +285,10 @@
         planName: schedule.planCode || subscription.planCode,
         kind: "payment",
         total: Number(payment.amountKopeks || 0) / 100,
-        months: 1,
-        start: dateMs(payment.periodStart, dateMs(payment.paidAt, now)),
-        end: dateMs(payment.periodEnd, dateMs(payment.paidAt, now)),
-        serviceEnd: dateMs(payment.periodEnd, dateMs(payment.paidAt, now)),
+        months: null,
+        start: payment.periodStart || null,
+        end: payment.periodEnd || null,
+        serviceEnd: payment.periodEnd || null,
         subId: subscription.id,
         payerId: subscription.payerUserId || user.id || "",
         payer: {
@@ -269,10 +298,9 @@
           email: profile.email,
           phone: profile.phone,
         },
-        method: "",
-        created: dateMs(payment.paidAt, now),
+        method: null,
+        created: payment.paidAt || null,
         status: "paid",
-        act: false,
       }));
     });
 
@@ -295,7 +323,72 @@
       user,
       organizationId,
       plans: Array.isArray(plans) ? plans.map(mapPlan) : [],
+      apiErrors: {
+        plans: plansError,
+        schedules: scheduleErrors,
+      },
     };
+  };
+
+  const refreshRealState = async () => {
+    const realState = await loadRealState();
+    window.__OPEN_LK_REAL_STATE__ = realState;
+    window.__OPEN_LK_REAL_PLANS__ = realState.plans || [];
+    return realState;
+  };
+
+  const getProjectId = () =>
+    window.__OPEN_LK_PROJECT_ID__ || window.__OPEN_LK_REAL_STATE__?.projectId || "";
+
+  const createRealCheckout = async ({ planCode, payerUserId, receiptEmail }) => {
+    const organizationId = window.__OPEN_LK_REAL_STATE__?.organizationId || "";
+    const projectId = getProjectId();
+    if (!organizationId) throw new Error("Не определена организация для оформления покупки.");
+    if (!planCode) throw new Error("Не выбран тариф.");
+    if (!payerUserId) throw new Error("Не определён плательщик.");
+
+    const payload = {
+      organizationId,
+      planCode,
+      payerUserId,
+      receiptEmail: receiptEmail || "",
+    };
+    if (projectId) payload.projectId = projectId;
+
+    const checkout = await subscriptionsApi.createCheckout(payload, crypto.randomUUID());
+
+    if (!checkout?.id) {
+      throw new Error("API не вернул id оформления.");
+    }
+
+    return checkout;
+  };
+
+  const realActions = {
+    async refresh() {
+      const realState = await refreshRealState();
+      window.dispatchEvent(new CustomEvent("open-lk-real-state-updated", { detail: realState }));
+      return realState;
+    },
+    getSubscription: (subscriptionId) => {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.getSubscription(state.organizationId, subscriptionId);
+    },
+    async cancelSubscription(subscriptionId) {
+      const state = window.__OPEN_LK_REAL_STATE__;
+      if (!state?.organizationId) throw new Error("Не определена организация.");
+      if (!state?.user?.id) throw new Error("Не определён пользователь.");
+      const response = await subscriptionsApi.cancel(state.organizationId, subscriptionId, state.user.id);
+      await this.refresh();
+      return response;
+    },
+    createCheckout: createRealCheckout,
+    async getCheckout(checkoutId) {
+      const organizationId = window.__OPEN_LK_REAL_STATE__?.organizationId || "";
+      if (!organizationId) throw new Error("Не определена организация.");
+      return subscriptionsApi.getCheckout(organizationId, checkoutId);
+    },
   };
 
   const getRoute = () => {
@@ -311,6 +404,8 @@
   const loadUi = (realState) => {
     window.__OPEN_LK_ROUTE__ = getRoute();
     window.__OPEN_LK_AUTH_PAGE__ = getRoute() === "login";
+    window.__OPEN_LK_REAL_MODE__ = Boolean(realState?.session && !realState?.demo);
+    window.__OPEN_LK_REAL_ACTIONS__ = realActions;
     window.__OPEN_LK_REAL_STATE__ = realState;
 
     if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
@@ -338,6 +433,8 @@
 
   const loadDemoUi = () => {
     window.__OPEN_LK_DEMO_MODE__ = true;
+    window.__OPEN_LK_REAL_MODE__ = false;
+    window.__OPEN_LK_REAL_ACTIONS__ = null;
     sessionStorage.setItem(DEMO_KEY, "1");
     loadUi({ demo: true, session: false, plans: [], subs: [], profile: {}, payers: [], cards: [], orders: [], tickets: [], events: [], schema: 2, clock: Date.now() });
   };

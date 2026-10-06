@@ -186,7 +186,12 @@
     const companies = Array.isArray(user.companies) ? user.companies : [];
     const favorite = companies.find((item) => item?.favorite) || companies[0];
     const organizationId = favorite?.company?.id || "";
-    const plans = await subscriptionsApi.getPlans();
+    let plans = [];
+    try {
+      plans = await subscriptionsApi.getPlans();
+    } catch (error) {
+      console.warn("[OPEN-LK] plans error:", error);
+    }
     const subscriptions = organizationId
       ? await subscriptionsApi.getOrganizationSubscriptions(organizationId)
       : [];
@@ -317,10 +322,6 @@
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
-      if (getToken()) {
-        window.location.assign("/subscriptions");
-        return;
-      }
       loadDemoUi();
       return;
     }

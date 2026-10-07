@@ -705,13 +705,16 @@
     },
     async updateProfile(profile) {
       const user = window.__OPEN_LK_REAL_STATE__?.user || {};
-      const updated = await auth.updateUser({
-        id: user.id,
-        name: profile?.first || "",
-        surname: profile?.last || "",
-        mail: profile?.email || "",
-        phoneNumber: profile?.phone || "",
-      });
+      const payload = { id: user.id };
+      const first = String(profile?.first || "").trim();
+      const last = String(profile?.last || "").trim();
+      const email = String(profile?.email || "").trim();
+      const phone = String(profile?.phone || "").trim();
+      if (first) payload.name = first;
+      if (last) payload.surname = last;
+      if (email) payload.mail = email;
+      if (phone) payload.phoneNumber = phone;
+      const updated = await auth.updateUser(payload);
       const realState = await refreshRealState();
       window.dispatchEvent(new CustomEvent("open-lk-real-state-updated", { detail: realState }));
       return updated;

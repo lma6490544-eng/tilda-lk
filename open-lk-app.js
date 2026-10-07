@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=22";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=22";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=24";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=24";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -46,7 +46,6 @@
   height: 10px !important;
   border-radius: 50% !important;
   background: var(--dot) !important;
-  display: block !important;
   animation: metaPreloaderDot 1.3s ease-in-out infinite alternate !important;
   animation-delay: calc(var(--index) * 110ms) !important;
 }

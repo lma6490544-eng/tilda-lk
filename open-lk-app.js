@@ -8,6 +8,95 @@
   const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=20";
   const DEMO_KEY = "openLkDemoMode";
 
+  const ENTRY_PRELOADER_STYLE = `
+#meta-entry-preloader {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  background: #12120f !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: opacity .42s cubic-bezier(.4,0,1,1), visibility 0s linear .42s !important;
+  contain: strict !important;
+}
+
+#meta-entry-preloader.is-leaving {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.meta-entry-preloader__core {
+  display: grid !important;
+  place-items: center !important;
+}
+
+.meta-entry-preloader__dots {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+
+.meta-entry-preloader__dots i {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: var(--dot) !important;
+  animation: metaPreloaderDot 1.3s ease-in-out infinite alternate !important;
+  animation-delay: calc(var(--index) * 110ms) !important;
+}
+
+@keyframes metaPreloaderDot {
+  from { opacity: .28; transform: translateY(0); }
+  to { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meta-entry-preloader__rail::after,
+  .meta-entry-preloader__dots i {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}`;
+
+  const ensureEntryPreloader = () => {
+    let loader = document.getElementById("meta-entry-preloader");
+    if (!loader) {
+      if (!document.getElementById("meta-entry-preloader-style")) {
+        const style = document.createElement("style");
+        style.id = "meta-entry-preloader-style";
+        style.textContent = ENTRY_PRELOADER_STYLE;
+        document.head.appendChild(style);
+      }
+      loader = document.createElement("div");
+      loader.id = "meta-entry-preloader";
+      loader.setAttribute("role", "status");
+      loader.setAttribute("aria-label", "Загрузка сайта МЕТА");
+      loader.innerHTML =
+        '<div class="meta-entry-preloader__core">' +
+          '<span class="meta-entry-preloader__dots" aria-hidden="true">' +
+            '<i style="--dot:#c4724a;--index:0"></i>' +
+            '<i style="--dot:#dca027;--index:1"></i>' +
+            '<i style="--dot:#20b2c9;--index:2"></i>' +
+            '<i style="--dot:#6155a9;--index:3"></i>' +
+          '</span>' +
+        '</div>';
+      document.body.appendChild(loader);
+    }
+    loader.classList.remove("is-leaving");
+    return loader;
+  };
+
+  const hideEntryPreloader = () => {
+    const loader = document.getElementById("meta-entry-preloader");
+    if (loader) loader.classList.add("is-leaving");
+  };
+
   const isLoginPage = () => window.location.pathname.replace(/\/$/, "") === "/login";
 
   const getToken = () => {
@@ -1043,7 +1132,7 @@
     window.addEventListener("open-lk-real-data", addPasswordField);
   };
 
-  const loadUi = (realState) => {
+  const loadUi = (realState, { onReady } = {}) => {
     const route = getRoute();
     if (!route) return;
     window.__OPEN_LK_ROUTE__ = route;
@@ -1073,12 +1162,14 @@
     script.async = false;
     script.onload = () => {
       window.dispatchEvent(new CustomEvent("open-lk-real-data", { detail: realState }));
+      if (typeof onReady === "function") onReady();
     };
     script.onerror = () => {
       const root = document.getElementById("root");
       if (root) {
         root.innerHTML = "<div style=\"padding:24px;font:16px sans-serif\">Не удалось загрузить интерфейс кабинета.</div>";
       }
+      if (typeof onReady === "function") onReady();
     };
     document.head.appendChild(script);
   };
@@ -1135,11 +1226,14 @@
       return;
     }
 
+    ensureEntryPreloader();
+
     try {
       const realState = await loadRealState();
       window.__OPEN_LK_DEMO_MODE__ = false;
-      loadUi(realState);
+      loadUi(realState, { onReady: hideEntryPreloader });
     } catch (error) {
+      hideEntryPreloader();
       console.error("[OPEN-LK] API error:", error);
       if (error?.status === 401 || error?.status === 403) {
         logout();

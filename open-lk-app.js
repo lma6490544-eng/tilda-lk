@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=28";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=28";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=30";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=30";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -1218,7 +1218,22 @@
     if (!isLoginPage()) window.location.replace("/login");
   };
 
+  let initPromise = null;
+  let initGeneration = 0;
+
+  const resetStalePreloaderForCurrentPage = () => {
+    const loader = document.getElementById("meta-preloader");
+    if (!loader) return;
+    // A Tilda page can be restored from BFCache with the previous loader state.
+    // Never keep a completed/half-left loader over a newly restored route.
+    loader.classList.remove("is-leaving", "is-gone", "is-simple-leaving");
+    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
+    entryPreloader = loader;
+    entryPreloaderLeft = false;
+  };
+
   const init = async () => {
+    const generation = ++initGeneration;
     const route = ensureKnownRoute();
     if (!route) return;
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
@@ -1260,12 +1275,47 @@
     }
   };
 
+  const bootCurrentPage = () => {
+    // Do not start two API/UI bootstraps for the same restored document.
+    if (initPromise) return initPromise;
+    initPromise = Promise.resolve().then(init).finally(() => {
+      initPromise = null;
+    });
+    return initPromise;
+  };
+
+  // Tilda pages may be restored from the browser BFCache when the user presses Back/Forward.
+  // In that case DOMContentLoaded does not fire again, so the React root/loader can otherwise
+  // remain in a stale state. Re-bootstrap only for persisted restores.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    resetStalePreloaderForCurrentPage();
+    const root = document.getElementById("root");
+    if (!root || !root.firstElementChild) {
+      bootCurrentPage();
+      return;
+    }
+    // If the restored page already has UI, make sure a stale loader cannot cover it.
+    hideEntryPreloaderAfterPaint();
+  });
+
+  window.addEventListener("popstate", () => {
+    // Covers hosts that restore/navigate Tilda content without a full document load.
+    const route = getRoute();
+    if (!route) {
+      ensureKnownRoute();
+      return;
+    }
+    resetStalePreloaderForCurrentPage();
+    bootCurrentPage();
+  });
+
   // Create the entry loader as early as possible, before Tilda/React can paint an empty page.
   bootstrapEntryPreloader();
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
+    document.addEventListener("DOMContentLoaded", bootCurrentPage, { once: true });
   } else {
-    init();
+    bootCurrentPage();
   }
 })();

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const API_BASE = "https://pilot.metasymbiont.com/api/v1";
+  const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
   const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=30";
@@ -145,7 +145,7 @@
     return normalized ? `+${normalized}` : "";
   };
 
-  const request = async (method, endpoint, body, extraHeaders = {}) => {
+  const request = async (method, endpoint, body, extraHeaders = {}, useAuth = true) => {
     const token = getToken();
     const headers = {
       accept: "application/json",
@@ -153,7 +153,7 @@
       ...extraHeaders,
     };
     if (body !== undefined) headers["Content-Type"] = "application/json";
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (useAuth && token) headers.Authorization = `Bearer ${token}`;
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
       method,
@@ -215,7 +215,7 @@
         login: normalizedLogin,
         password,
         phone: "",
-      });
+      }, {}, false);
       saveToken(extractToken(data));
       clearDemoMode();
       return data;
@@ -224,7 +224,7 @@
     async sendRegisterPin({ login }) {
       return request("POST", "/auth/user/phone/pin", {
         login: apiPhone(login),
-      });
+      }, {}, false);
     },
 
     async confirmRegister({ login, password, code, name, surname, mail }) {
@@ -235,7 +235,7 @@
       const confirmation = await request("POST", "/auth/user/phone/pin/confirm", {
         pin: code,
         login: phone,
-      });
+      }, {}, false);
 
       if (confirmation?.status && confirmation.status !== "PHONE_CONFIRMED") {
         throw new Error("Телефон не подтверждён.");
@@ -246,7 +246,7 @@
         password,
         politicAgreements: true,
         hash: crypto.randomUUID(),
-      });
+      }, {}, false);
       saveToken(extractToken(data));
 
       const createdUser = await request("GET", "/lk/user");

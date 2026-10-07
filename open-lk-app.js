@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=18";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=18";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=20";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=20";
   const DEMO_KEY = "openLkDemoMode";
 
   const isLoginPage = () => window.location.pathname.replace(/\/$/, "") === "/login";
@@ -238,6 +238,12 @@
         `/subscriptions/organizations/${organizationId}/payments?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`
       ),
 
+    listDocuments: (organizationId, limit = 50, offset = 0) =>
+      request(
+        "GET",
+        `/subscriptions/organizations/${organizationId}/documents?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`
+      ),
+
     quoteCartPayment: (organizationId, payload) =>
       request("POST", `/subscriptions/organizations/${organizationId}/payment-quotes`, payload),
 
@@ -376,6 +382,13 @@
       end,
       months: active?.purchasedPeriodMonths || null,
       auto: null,
+      canRenew: active?.canRenew === true,
+      remainingPercent:
+        Number.isFinite(Number(active?.remainingPercent))
+          ? Number(active.remainingPercent)
+          : null,
+      currentPeriodStart: active?.currentPeriodStart || start || null,
+      currentPeriodEnd: active?.currentPeriodEnd || until || null,
       status: statusCode || null,
       statusLabel: item?.status?.label || "",
       nextChargeAt: null,
@@ -420,6 +433,69 @@
     };
   };
 
+  const mapDocument = (document, payerById) => {
+    const payerId = document?.payerId || "";
+    const payer = payerById[payerId] || {
+      id: payerId,
+      type: "person",
+      name: "",
+      email: document?.receiptEmail || "",
+      phone: "",
+    };
+    const total = Number(document?.amountKopeks || 0) / 100;
+    const status = document?.bankVerificationStatus === "BANK_UNAVAILABLE"
+      ? "unknown"
+      : "paid";
+    const items = Array.isArray(document?.items)
+      ? document.items.map((item, index) => ({
+          id: `${document?.id || "document"}-${index}`,
+          planId: document?.planCode || "",
+          product: document?.planCode || "",
+          planName: item?.name || document?.planCode || "",
+          total: Number(item?.amountKopeks || 0) / 100,
+          months: null,
+          start: document?.bankPaidAt || document?.bankCreatedAt || null,
+          end: null,
+          serviceEnd: null,
+          act: false,
+        }))
+      : [];
+    return {
+      id: document?.id || "",
+      number: document?.bankOperationId || document?.id || "",
+      planId: document?.planCode || "",
+      product: document?.planCode || "",
+      planName: items.map((item) => item.planName).join(", "),
+      kind: "payment",
+      method: "payment",
+      total,
+      months: null,
+      start: document?.bankPaidAt || document?.bankCreatedAt || null,
+      end: null,
+      serviceEnd: null,
+      subId: document?.subscriptionId || null,
+      payerId,
+      payer,
+      created: document?.bankPaidAt || document?.bankCreatedAt || null,
+      status,
+      act: false,
+      items,
+      receiptPdfUrl: document?.receiptPdfUrl || null,
+      fiscalNumber: document?.fiscalNumber || null,
+      fiscalizedAt: document?.fiscalizedAt || null,
+      fiscalReceiptStatus: document?.fiscalReceiptStatus || null,
+      receiptEmail: document?.receiptEmail || null,
+      bankOperationId: document?.bankOperationId || null,
+      bankPaymentId: document?.bankPaymentId || null,
+      bankPaymentType: document?.bankPaymentType || null,
+      bankVerificationStatus: document?.bankVerificationStatus || null,
+      bankCreatedAt: document?.bankCreatedAt || null,
+      bankPaidAt: document?.bankPaidAt || null,
+      currency: document?.currency || "RUB",
+      documentItems: Array.isArray(document?.items) ? document.items : [],
+    };
+  };
+
   const loadRealState = async () => {
     const user = await request("GET", "/lk/user");
     const companies = Array.isArray(user.companies) ? user.companies : [];
@@ -447,6 +523,8 @@
         cards: [],
         subs: [],
         orders: [],
+        documents: [],
+        rawDocuments: [],
         tickets: [],
         events: [],
         user,
@@ -458,13 +536,14 @@
     }
 
     const apiErrors = {};
-    const [mySubscriptionsResult, tariffResults, payerResult, checkoutResult, paymentResult] =
+    const [mySubscriptionsResult, tariffResults, payerResult, checkoutResult, paymentResult, documentResult] =
       await Promise.allSettled([
         subscriptionsApi.getMySubscriptions(organizationId, "ALL"),
         Promise.all([1, 3, 12].map((period) => subscriptionsApi.getTariffs(organizationId, period))),
         subscriptionsApi.getPayerDetails(organizationId),
         subscriptionsApi.listCheckouts(organizationId),
         subscriptionsApi.listPayments(organizationId),
+        subscriptionsApi.listDocuments(organizationId),
       ]);
 
     const mySubscriptions =
@@ -526,6 +605,17 @@
         traceId: paymentResult.reason?.traceId || "",
       };
     }
+    const documents =
+      documentResult.status === "fulfilled" && Array.isArray(documentResult.value)
+        ? documentResult.value
+        : [];
+    if (documentResult.status === "rejected") {
+      apiErrors.documents = {
+        message: documentResult.reason?.message || "Не удалось загрузить документы.",
+        code: documentResult.reason?.code || "",
+        traceId: documentResult.reason?.traceId || "",
+      };
+    }
 
     const tariffResponses = [1, 3, 12].map((period) => tariffByPeriod[period]);
     const allAvailableTariffs = tariffResponses.flatMap((response) =>
@@ -545,6 +635,7 @@
     const subs = myItems.map((item) => mapSubscriptionCard(item, activeTariffs, payerDetails, now));
 
     const payerById = Object.fromEntries(payerDetails.map((payer) => [payer.id, payer]));
+    const mappedDocuments = documents.map((document) => mapDocument(document, payerById));
     const orders = checkoutOrders.map((order) => mapOrder(order, payerById));
     const paidPaymentsByCheckout = new Map(payments.map((payment) => [payment.checkoutId, payment]));
     orders.forEach((order) => {
@@ -596,6 +687,8 @@
       cards: [],
       subs,
       orders,
+      documents: mappedDocuments,
+      rawDocuments: documents,
       tickets: [],
       events: [],
       user,
@@ -613,6 +706,29 @@
       })),
       apiErrors,
     };
+  };
+
+  window.__OPEN_LK_OPEN_DOCUMENT__ = async (url, filename = "document.pdf") => {
+    if (!url) throw new Error("Документ недоступен.");
+    const absoluteUrl = /^https?:\/\//i.test(url)
+      ? url
+      : `${new URL(API_BASE).origin}${String(url).startsWith("/") ? url : `/${url}`}`;
+    const token = getToken();
+    const response = await fetch(absoluteUrl, {
+      headers: token ? { Authorization: `Bearer ${token}`, accept: "application/pdf" } : { accept: "application/pdf" },
+    });
+    if (!response.ok) throw new Error(`Не удалось открыть документ (${response.status}).`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   };
 
   const refreshRealState = async () => {

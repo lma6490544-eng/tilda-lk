@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=20";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=20";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=22";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=22";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -46,6 +46,7 @@
   height: 10px !important;
   border-radius: 50% !important;
   background: var(--dot) !important;
+  display: block !important;
   animation: metaPreloaderDot 1.3s ease-in-out infinite alternate !important;
   animation-delay: calc(var(--index) * 110ms) !important;
 }
@@ -95,6 +96,26 @@
   const hideEntryPreloader = () => {
     const loader = document.getElementById("meta-entry-preloader");
     if (loader) loader.classList.add("is-leaving");
+  };
+
+  window.__OPEN_LK_SHOW_PRELOADER__ = () => ensureEntryPreloader();
+  window.__OPEN_LK_HIDE_PRELOADER__ = () => hideEntryPreloader();
+
+  const bootstrapEntryPreloader = () => {
+    if (isLoginPage()) return null;
+    return ensureEntryPreloader();
+  };
+
+  const hideEntryPreloaderAfterPaint = () => {
+    const finish = () => {
+      const root = document.getElementById("root");
+      if (!root || !root.firstElementChild) {
+        window.requestAnimationFrame(finish);
+        return;
+      }
+      window.requestAnimationFrame(() => window.requestAnimationFrame(hideEntryPreloader));
+    };
+    window.requestAnimationFrame(finish);
   };
 
   const isLoginPage = () => window.location.pathname.replace(/\/$/, "") === "/login";
@@ -1226,12 +1247,12 @@
       return;
     }
 
-    ensureEntryPreloader();
+    bootstrapEntryPreloader();
 
     try {
       const realState = await loadRealState();
       window.__OPEN_LK_DEMO_MODE__ = false;
-      loadUi(realState, { onReady: hideEntryPreloader });
+      loadUi(realState, { onReady: hideEntryPreloaderAfterPaint });
     } catch (error) {
       hideEntryPreloader();
       console.error("[OPEN-LK] API error:", error);
@@ -1245,6 +1266,9 @@
       }
     }
   };
+
+  // Create the entry loader as early as possible, before Tilda/React can paint an empty page.
+  bootstrapEntryPreloader();
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });

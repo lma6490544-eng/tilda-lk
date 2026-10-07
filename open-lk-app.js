@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=25";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=25";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=27";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=27";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -65,7 +65,9 @@
   };
 
   const hideEntryPreloader = () => {
-    const loader = ensureEntryPreloader();
+    const loader = entryPreloader && document.body && document.body.contains(entryPreloader)
+      ? entryPreloader
+      : document.getElementById("meta-preloader");
     if (!loader || entryPreloaderLeft) return;
     entryPreloaderLeft = true;
     loader.style.setProperty("--mp-sweep", loader.offsetHeight + "px");
@@ -83,13 +85,19 @@
   const bootstrapEntryPreloader = () => ensureEntryPreloader();
 
   const hideEntryPreloaderAfterPaint = () => {
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 8000;
     const waitForUi = () => {
       const root = document.getElementById("root");
-      if (!root || !root.firstElementChild) {
-        window.requestAnimationFrame(waitForUi);
+      if (root && root.firstElementChild) {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(hideEntryPreloader));
         return;
       }
-      window.requestAnimationFrame(() => window.requestAnimationFrame(hideEntryPreloader));
+      if (Date.now() - startedAt >= MAX_WAIT_MS) {
+        hideEntryPreloader();
+        return;
+      }
+      window.requestAnimationFrame(waitForUi);
     };
     window.requestAnimationFrame(waitForUi);
   };
@@ -1177,7 +1185,7 @@
     window.location.assign("/subscriptions");
   };
 
-  const loadDemoUi = () => {
+  const loadDemoUi = ({ onReady } = {}) => {
     window.__OPEN_LK_OPEN_DEMO__ = openDemo;
     window.__OPEN_LK_DEMO_MODE__ = true;
     window.__OPEN_LK_REAL_MODE__ = false;
@@ -1196,7 +1204,7 @@
       events: [],
       schema: 2,
       clock: Date.now(),
-    });
+    }, { onReady });
   };
 
   const redirectToLogin = () => {
@@ -1209,12 +1217,14 @@
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
-      loadDemoUi();
+      bootstrapEntryPreloader();
+      loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
       return;
     }
 
     if (demoMode) {
-      loadDemoUi();
+      bootstrapEntryPreloader();
+      loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
       return;
     }
 

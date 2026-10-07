@@ -376,6 +376,33 @@
     );
   };
 
+  auth.sendPasswordResetPin = async ({ login }) => {
+    const phone = apiPhone(login);
+    if (!phone) throw new Error("Введите телефон.");
+    return request("POST", "/auth/user/phone/pin", { login: phone }, {}, false);
+  };
+
+  auth.confirmPasswordReset = async ({ login, code, newPassword, newPasswordConfirm }) => {
+    const phone = apiPhone(login);
+    if (!phone) throw new Error("Введите телефон.");
+    if (!/^\d{6}$/.test(String(code || ""))) {
+      throw new Error("Код из SMS должен содержать 6 цифр.");
+    }
+    if (!newPassword) throw new Error("Введите новый пароль.");
+    if (newPassword !== newPasswordConfirm) throw new Error("Пароли не совпадают.");
+
+    await request("POST", "/auth/user/phone/pin/confirm", {
+      pin: code,
+      login: phone,
+    }, {}, false);
+
+    return request("PUT", "/auth/user/password/reset", {
+      loginNumber: phone,
+      newPassword,
+      newPasswordConfirm,
+    }, {}, false);
+  };
+
   auth.changePassword = async ({ oldPassword, newPassword, newPasswordConfirm }) => {
     if (!oldPassword) throw new Error("Введите текущий пароль.");
     if (!newPassword) throw new Error("Введите новый пароль.");

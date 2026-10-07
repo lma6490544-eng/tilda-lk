@@ -4,8 +4,8 @@
   const API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=27";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=27";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=28";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=28";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -51,6 +51,7 @@
     loader.style.setProperty("--mp-loops", "infinite");
     loader.style.setProperty("--mp-cycle", "1.15s");
     loader.style.setProperty("--mp-rgb", "196 114 74");
+    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
     loader.innerHTML = '<div class="meta-preloader__veil"><span class="meta-preloader__dots" aria-hidden="true">' +
       '<i style="--mp-color:#DCA028;--mp-index:0"></i>' +
       '<i style="--mp-color:#6155A9;--mp-index:1"></i>' +
@@ -70,13 +71,19 @@
       : document.getElementById("meta-preloader");
     if (!loader || entryPreloaderLeft) return;
     entryPreloaderLeft = true;
-    loader.style.setProperty("--mp-sweep", loader.offsetHeight + "px");
-    loader.classList.add("is-leaving");
+    const useCurtain = loader.dataset.useCurtain === "1";
+    if (useCurtain) {
+      loader.style.setProperty("--mp-sweep", loader.offsetHeight + "px");
+      loader.classList.add("is-leaving");
+    } else {
+      loader.classList.add("is-simple-leaving");
+    }
+    const removeAfter = useCurtain ? 1120 : 220;
     window.setTimeout(() => {
       loader.classList.add("is-gone");
       if (loader.parentNode) loader.parentNode.removeChild(loader);
       entryPreloader = null;
-    }, 1120);
+    }, removeAfter);
   };
 
   window.__OPEN_LK_SHOW_PRELOADER__ = () => ensureEntryPreloader();

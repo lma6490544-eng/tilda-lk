@@ -1,6 +1,6 @@
-# Open LK — Tilda / GitHub package v41
+# Open LK — Tilda / GitHub package v47
 
-Интеграция личного кабинета с OpenAPI-контрактом подписок v2.0.0 (`api(2).yaml`).
+Интеграция личного кабинета с OpenAPI-контрактом подписок v2.0.0 (`api(3).yaml`).
 
 ## Что синхронизировано с backend
 
@@ -43,7 +43,7 @@
 - `POST /subscriptions/organizations/{organizationId}/cart-checkouts`
 - `GET /subscriptions/organizations/{organizationId}/cart-checkouts/{checkoutId}`
 
-Оплата идёт через `payment-quotes` → `cart-checkouts`. В браузерный запрос checkout передаётся только `quoteId` и `Idempotency-Key`; `payerUserId` из JWT frontend самостоятельно не передаёт.
+Оплата идёт через `payment-quotes` → `cart-checkouts`. В quote передаются `tariffIds`, `payerId` и `corpusNumber`. Для текущего ЛК `corpusNumber` всегда равен `"1"`: один объект/корпус на организацию. В браузерный запрос checkout передаётся только `quoteId` и `Idempotency-Key`; `payerUserId` из JWT frontend самостоятельно не передаётся.
 
 Статус checkout не трактуется как успешная оплата: `PAID` считается только backend-подтверждением банка.
 

@@ -284,6 +284,10 @@
     },
   };
 
+  // В текущей модели подписка привязана к корпусу. Для ЛК сейчас
+  // используется один объект/корпус, поэтому backend всегда получает "1".
+  const DEFAULT_CORPUS_NUMBER = "1";
+
   const subscriptionsApi = {
     // Старые контракты, которые всё ещё используются для деталей подписки,
     // отмены и совместимости с уже существующим UI.
@@ -533,6 +537,7 @@
       id: item.subscriptionId,
       planId: item?.plan?.code || item?.product?.code || "",
       payerId,
+      corpusNumber: item?.corpusNumber || DEFAULT_CORPUS_NUMBER,
       start: startMs,
       end,
       months: active?.purchasedPeriodMonths || null,
@@ -574,6 +579,7 @@
       serviceEnd: null,
       subId: order?.subscriptionId || null,
       payerId,
+      corpusNumber: order?.corpusNumber || DEFAULT_CORPUS_NUMBER,
       payer: payer || { id: payerId, type: "person", name: "", email: "", phone: "" },
       method: null,
       created: order?.createdAt || null,
@@ -1026,6 +1032,7 @@
     const quote = await subscriptionsApi.quoteCartPayment(organizationId, {
       tariffIds,
       payerId,
+      corpusNumber: DEFAULT_CORPUS_NUMBER,
     });
     if (!quote?.quoteId) throw new Error("API не вернул quoteId расчёта.");
 
@@ -1096,7 +1103,11 @@
     quoteCartPayment: async ({ tariffIds, payerId }) => {
       const state = window.__OPEN_LK_REAL_STATE__;
       if (!state?.organizationId) throw new Error("Не определена организация.");
-      return subscriptionsApi.quoteCartPayment(state.organizationId, { tariffIds, payerId });
+      return subscriptionsApi.quoteCartPayment(state.organizationId, {
+        tariffIds,
+        payerId,
+        corpusNumber: DEFAULT_CORPUS_NUMBER,
+      });
     },
     createCartCheckout: createRealCartCheckout,
     async getCheckout(checkoutId) {

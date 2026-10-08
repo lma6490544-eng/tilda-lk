@@ -1529,7 +1529,7 @@
     if (!document.getElementById("open-lk-final-tariff-card-style")) {
       const tariffStyle = document.createElement("style");
       tariffStyle.id = "open-lk-final-tariff-card-style";
-      tariffStyle.textContent = ".tariff-card>p{min-height:50px !important;margin:10px 0 0 !important;font-size:12px;flex:1}";
+      tariffStyle.textContent = ".tariff-card>p{min-height:50px !important;margin:10px 0 0 !important;font-size:12px;flex:1} .basket-payer .payer-requisites-row>.payer-requisites-button{font-size:11px !important;align-self:flex-end !important;margin-left:auto !important} .basket-payer .payer-add-row>.add-payer-button{font-size:14px !important;align-self:flex-start !important;margin-left:0 !important}";
       document.head.appendChild(tariffStyle);
     }
     if (realState?.demo) {

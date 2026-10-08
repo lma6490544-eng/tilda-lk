@@ -1,4 +1,4 @@
-# Open LK — Tilda / GitHub package v47
+# Open LK — Tilda / GitHub package v71
 
 Интеграция личного кабинета с OpenAPI-контрактом подписок v2.0.0 (`api(3).yaml`).
 

@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=33";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=33";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=34";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=34";
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
 
@@ -114,9 +114,11 @@
     return true;
   };
 
-  const ensureEntryPreloader = () => {
-    if (!shouldShowLkEntryCurtain()) return null;
-    // Do not reuse Tilda Header's preloader. The LK owns its own stable loader.
+  const ensureEntryPreloader = (forceCurtain = null) => {
+    // Every LK document gets the existing five-dot preloader. Only a true LK entry
+    // gets the curtain animation; ordinary LK pages use the same loader without the curtain.
+    const useCurtain = forceCurtain === null ? shouldShowLkEntryCurtain() : Boolean(forceCurtain);
+
     const foreignLoader = document.getElementById("meta-preloader");
     if (foreignLoader && foreignLoader !== entryPreloader && foreignLoader.dataset.openLkOwned !== "1") {
       foreignLoader.remove();
@@ -124,12 +126,14 @@
 
     if (entryPreloader && document.body && document.body.contains(entryPreloader)) {
       clearEntryPreloaderRemovalTimer();
+      clearEntryPreloaderSafetyTimer();
       entryPreloader.classList.remove("is-leaving", "is-gone", "is-simple-leaving");
-      entryPreloader.dataset.useCurtain = "1";
+      entryPreloader.dataset.useCurtain = useCurtain ? "1" : "0";
       entryPreloaderLeft = false;
       armEntryPreloaderSafetyTimer(entryPreloader);
       return entryPreloader;
     }
+
     if (!document.getElementById("meta-entry-preloader-style") && document.head) {
       const style = document.createElement("style");
       style.id = "meta-entry-preloader-style";
@@ -137,6 +141,7 @@
       document.head.appendChild(style);
     }
     if (!document.body) return null;
+
     const loader = document.createElement("div");
     loader.id = "meta-preloader";
     loader.dataset.openLkOwned = "1";
@@ -145,8 +150,7 @@
     loader.style.setProperty("--mp-loops", "infinite");
     loader.style.setProperty("--mp-cycle", "1.15s");
     loader.style.setProperty("--mp-rgb", "196 114 74");
-    // Use the existing LK curtain for every LK entry, regardless of auth state.
-    loader.dataset.useCurtain = "1";
+    loader.dataset.useCurtain = useCurtain ? "1" : "0";
     loader.innerHTML = '<div class="meta-preloader__veil"><span class="meta-preloader__dots" aria-hidden="true">' +
       '<i style="--mp-color:#DCA028;--mp-index:0"></i>' +
       '<i style="--mp-color:#6155A9;--mp-index:1"></i>' +
@@ -161,6 +165,9 @@
     return loader;
   };
 
+  const showPagePreloader = () => ensureEntryPreloader(false);
+  const showEntryPreloader = () => ensureEntryPreloader(true);
+
   const hideEntryPreloader = () => {
     const loader = entryPreloader && document.body && document.body.contains(entryPreloader)
       ? entryPreloader
@@ -168,9 +175,6 @@
     if (!loader || entryPreloaderLeft) return;
     clearEntryPreloaderSafetyTimer();
     clearEntryPreloaderRemovalTimer();
-    // The entry transition is no longer pending as soon as its exit starts.
-    // This prevents a fast internal click during the 1.12s curtain animation
-    // from carrying the entry flag onto another LK section.
     clearPendingLkEntryCurtain();
     entryPreloaderLeft = true;
     const useCurtain = loader.dataset.useCurtain === "1";
@@ -180,6 +184,7 @@
     } else {
       loader.classList.add("is-simple-leaving");
     }
+    // Keep this comfortably longer than the curtain animation but always bounded.
     const removeAfter = useCurtain ? 1120 : 220;
     entryPreloaderRemovalTimer = window.setTimeout(() => {
       entryPreloaderRemovalTimer = null;
@@ -190,12 +195,12 @@
     }, removeAfter);
   };
 
-  window.__OPEN_LK_SHOW_PRELOADER__ = () => ensureEntryPreloader();
+  window.__OPEN_LK_SHOW_PRELOADER__ = () => showPagePreloader();
   window.__OPEN_LK_HIDE_PRELOADER__ = () => hideEntryPreloader();
 
-  const bootstrapEntryPreloader = () => {
+  const bootstrapEntryPreloader = (useCurtain = null) => {
     document.documentElement.classList.remove("mp-hold");
-    return ensureEntryPreloader();
+    return ensureEntryPreloader(useCurtain);
   };
 
   const hideEntryPreloaderAfterPaint = () => {
@@ -1459,6 +1464,8 @@
 
   let initPromise = null;
   let initGeneration = 0;
+  // null = detect whether this is a true LK entry; false = internal LK navigation.
+  let preloaderCurtainOverride = null;
 
   const resetStalePreloaderForCurrentPage = () => {
     const loader = document.getElementById("meta-preloader");
@@ -1507,7 +1514,8 @@
       // Login is available only through the real authentication API.
       // Never load the old demo scenario on the authorization page.
       clearDemoMode();
-      bootstrapEntryPreloader();
+      bootstrapEntryPreloader(preloaderCurtainOverride);
+      preloaderCurtainOverride = null;
       loadUi({
         demo: false,
         session: false,
@@ -1535,7 +1543,8 @@
       return;
     }
 
-    bootstrapEntryPreloader();
+    bootstrapEntryPreloader(preloaderCurtainOverride);
+    preloaderCurtainOverride = null;
 
     try {
       const realState = await loadRealState();
@@ -1572,12 +1581,14 @@
     resetStalePreloaderForCurrentPage();
     const root = document.getElementById("root");
     if (!root || !root.firstElementChild) {
+      preloaderCurtainOverride = false;
+      showPagePreloader();
       bootCurrentPage();
       return;
     }
-    // The restored LK UI is already ready. Do not start an entry transition.
-    clearEntryPreloaderSafetyTimer();
-    clearEntryPreloaderRemovalTimer();
+    // BFCache restoration is an internal LK return: show only the normal preloader, never the curtain.
+    showPagePreloader();
+    window.requestAnimationFrame(() => window.requestAnimationFrame(hideEntryPreloader));
   });
 
   window.addEventListener("popstate", () => {
@@ -1588,8 +1599,9 @@
       ensureKnownRoute();
       return;
     }
-    const loader = document.getElementById("meta-preloader");
-    if (loader) hideEntryPreloader();
+    // Internal LK navigation still gets the normal five-dot preloader, but never the entry curtain.
+    preloaderCurtainOverride = false;
+    showPagePreloader();
     bootCurrentPage();
   });
 

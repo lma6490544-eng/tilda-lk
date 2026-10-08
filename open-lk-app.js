@@ -482,6 +482,10 @@
     discountAmount: Number(tariff?.discountAmountKopeks || 0) / 100,
     discountPercent: Number(tariff?.discountPercent || 0),
     totalAmount: Number(tariff?.totalAmountKopeks || 0) / 100,
+    requestOnly:
+      tariff?.totalAmountKopeks !== null &&
+      tariff?.totalAmountKopeks !== undefined &&
+      Number(tariff.totalAmountKopeks) === 0,
     priceStatus: tariff?.priceStatus || null,
     canPurchase: tariff?.canPurchase === true,
   });
@@ -871,6 +875,64 @@
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   };
+
+
+  // The public Tilda contact popup lives in the global header record.
+  // On LK pages the visual header is hidden, but the popup record remains in the DOM.
+  function installLkHeaderBridge() {
+    if (document.getElementById("open-lk-header-bridge-style")) return;
+
+    const style = document.createElement("style");
+    style.id = "open-lk-header-bridge-style";
+    style.textContent =
+      "#meta-global-header{display:none !important;}";
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function openPublicContactPopup(tariffName) {
+    installLkHeaderBridge();
+
+    const tariff = String(tariffName || "").trim();
+    const startedAt = Date.now();
+    const timeoutMs = 8000;
+
+    const tryOpen = () => {
+      const popup = document.querySelector("#mc-popup[data-popup=\"contact\"]");
+      const api = window.MetaContactPopup;
+
+      if (popup && api && typeof api.open === "function") {
+        const trigger = document.createElement("button");
+        trigger.type = "button";
+        trigger.setAttribute("data-meta-popup", "contact");
+        trigger.setAttribute("data-meta-source", "Личный кабинет");
+        if (tariff) trigger.setAttribute("data-meta-tariff", tariff);
+        trigger.textContent = "По запросу";
+        trigger.setAttribute("aria-hidden", "true");
+        trigger.tabIndex = -1;
+        trigger.style.cssText =
+          "position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:0;pointer-events:none;";
+        document.body.appendChild(trigger);
+
+        try {
+          api.open(trigger);
+        } finally {
+          window.setTimeout(() => trigger.remove(), 0);
+        }
+        return true;
+      }
+
+      if (Date.now() - startedAt < timeoutMs) {
+        window.setTimeout(tryOpen, 100);
+        return false;
+      }
+
+      return false;
+    };
+
+    return tryOpen();
+  }
+
+  window.__OPEN_LK_OPEN_CONTACT__ = openPublicContactPopup;
 
   const refreshRealState = async () => {
     const realState = await loadRealState();
@@ -1276,6 +1338,12 @@
     const generation = ++initGeneration;
     const route = ensureKnownRoute();
     if (!route) return;
+
+    // The Tilda header must stay enabled on every LK page because the
+    // contact popup lives in the same global Tilda record. Only the visual
+    // header mount is hidden; the popup record remains available in the DOM.
+    installLkHeaderBridge();
+
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {

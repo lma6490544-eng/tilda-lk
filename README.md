@@ -1,4 +1,4 @@
-# Open LK — Tilda / GitHub package v39
+# Open LK — Tilda / GitHub package v41
 
 Интеграция личного кабинета с OpenAPI-контрактом подписок v2.0.0 (`api(2).yaml`).
 
@@ -71,3 +71,12 @@ REAL-режим использует backend API и не подменяет от
 ## Tilda
 
 HTML-страницы Tilda в архив не входят. `/login`, `/subscriptions`, `/tariffs`, `/profile`, `/help` остаются отдельными страницами Tilda.
+
+
+## Global Tilda header / contact popup
+
+Tilda Header должен быть включён на всех страницах ЛК (`/login`, `/subscriptions`, `/tariffs`, `/profile`, `/help`).
+
+Frontend автоматически скрывает только визуальный контейнер `#meta-global-header` через CSS. Глобальный блок с контактным popup (`#mc-popup`) не скрывается и остаётся доступным в DOM.
+
+Тарифы с `totalAmountKopeks === 0` показывают кнопку `По запросу`; она открывает существующий Tilda contact popup. Отдельная API-ручка обратной связи для этого сценария не используется.

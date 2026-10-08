@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=35";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=35";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=36";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=36";
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
 
@@ -406,7 +406,8 @@
       );
 
       clearDemoMode();
-      window.location.replace("/subscriptions");
+      // Navigation after registration is handled by the auth UI so it can persist
+      // the one-time success toast and the post-registration destination first.
       return data;
     },
   };
@@ -1406,6 +1407,40 @@
     window.addEventListener("open-lk-real-data", addPasswordField);
   };
 
+  const POST_AUTH_ROUTE_KEY = "meta_lk_post_auth_route";
+  const PENDING_TOAST_KEY = "meta_lk_pending_toast";
+
+  const consumePendingRegistrationToast = () => {
+    let message = "";
+    try {
+      message = sessionStorage.getItem(PENDING_TOAST_KEY) || "";
+      if (message) sessionStorage.removeItem(PENDING_TOAST_KEY);
+    } catch {}
+    if (!message) return;
+
+    // Use the same existing .toast visual class as all successful LK validations.
+    window.setTimeout(() => {
+      const old = document.querySelector(".open-lk-registration-toast");
+      if (old) old.remove();
+      const node = document.createElement("div");
+      node.className = "toast open-lk-registration-toast";
+      node.setAttribute("role", "status");
+      node.innerHTML = '<span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;font-size:18px;line-height:1">✓</span><span></span>';
+      node.lastElementChild.textContent = message;
+      document.body.appendChild(node);
+      window.setTimeout(() => { if (node.isConnected) node.remove(); }, 4500);
+    }, 0);
+  };
+
+  const consumePostAuthRoute = () => {
+    let route = "";
+    try {
+      route = sessionStorage.getItem(POST_AUTH_ROUTE_KEY) || "";
+      if (route) sessionStorage.removeItem(POST_AUTH_ROUTE_KEY);
+    } catch {}
+    return route;
+  };
+
   const loadUi = (realState, { onReady } = {}) => {
     const route = getRoute();
     if (!route) return;
@@ -1446,6 +1481,7 @@
     script.onload = () => {
       window.dispatchEvent(new CustomEvent("open-lk-real-data", { detail: realState }));
       if (typeof onReady === "function") onReady();
+      consumePendingRegistrationToast();
     };
     script.onerror = () => {
       const root = document.getElementById("root");
@@ -1541,6 +1577,20 @@
     if (!getToken()) {
       redirectToLogin();
       return;
+    }
+
+    // A successful registration and a normal login intentionally land on different
+    // LK sections. The marker is one-shot and only affects the intermediate
+    // /subscriptions navigation produced by the shared auth callback.
+    if (window.location.pathname.replace(/\/+$/, "") === "/subscriptions") {
+      let postAuthRoute = "";
+      try {
+        postAuthRoute = sessionStorage.getItem(POST_AUTH_ROUTE_KEY) || "";
+      } catch {}
+      if (postAuthRoute === "/tariffs") {
+        window.location.replace("/tariffs");
+        return;
+      }
     }
 
     bootstrapEntryPreloader(preloaderCurtainOverride);

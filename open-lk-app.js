@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=31";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=31";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=32";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=32";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -30,6 +30,34 @@
 
   let entryPreloader = null;
   let entryPreloaderLeft = false;
+  let entryPreloaderSafetyTimer = null;
+  let entryPreloaderRemovalTimer = null;
+  const ENTRY_PRELOADER_SAFETY_MS = 12000;
+
+  const clearEntryPreloaderSafetyTimer = () => {
+    if (entryPreloaderSafetyTimer !== null) {
+      window.clearTimeout(entryPreloaderSafetyTimer);
+      entryPreloaderSafetyTimer = null;
+    }
+  };
+
+  const clearEntryPreloaderRemovalTimer = () => {
+    if (entryPreloaderRemovalTimer !== null) {
+      window.clearTimeout(entryPreloaderRemovalTimer);
+      entryPreloaderRemovalTimer = null;
+    }
+  };
+
+  const armEntryPreloaderSafetyTimer = (loader) => {
+    clearEntryPreloaderSafetyTimer();
+    entryPreloaderSafetyTimer = window.setTimeout(() => {
+      entryPreloaderSafetyTimer = null;
+      if (loader && document.body && document.body.contains(loader)) {
+        // Absolute fallback: the entry curtain must never be able to block the LK forever.
+        hideEntryPreloader();
+      }
+    }, ENTRY_PRELOADER_SAFETY_MS);
+  };
 
   const ensureEntryPreloader = () => {
     // Do not reuse Tilda Header's preloader. The LK owns its own stable loader.
@@ -39,8 +67,11 @@
     }
 
     if (entryPreloader && document.body && document.body.contains(entryPreloader)) {
-      entryPreloader.classList.remove("is-leaving", "is-gone");
+      clearEntryPreloaderRemovalTimer();
+      entryPreloader.classList.remove("is-leaving", "is-gone", "is-simple-leaving");
+      entryPreloader.dataset.useCurtain = "1";
       entryPreloaderLeft = false;
+      armEntryPreloaderSafetyTimer(entryPreloader);
       return entryPreloader;
     }
     if (!document.getElementById("meta-entry-preloader-style") && document.head) {
@@ -58,7 +89,8 @@
     loader.style.setProperty("--mp-loops", "infinite");
     loader.style.setProperty("--mp-cycle", "1.15s");
     loader.style.setProperty("--mp-rgb", "196 114 74");
-    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
+    // Use the existing LK curtain for every LK entry, regardless of auth state.
+    loader.dataset.useCurtain = "1";
     loader.innerHTML = '<div class="meta-preloader__veil"><span class="meta-preloader__dots" aria-hidden="true">' +
       '<i style="--mp-color:#DCA028;--mp-index:0"></i>' +
       '<i style="--mp-color:#6155A9;--mp-index:1"></i>' +
@@ -69,6 +101,7 @@
     document.body.appendChild(loader);
     entryPreloader = loader;
     entryPreloaderLeft = false;
+    armEntryPreloaderSafetyTimer(loader);
     return loader;
   };
 
@@ -77,6 +110,8 @@
       ? entryPreloader
       : document.getElementById("meta-preloader");
     if (!loader || entryPreloaderLeft) return;
+    clearEntryPreloaderSafetyTimer();
+    clearEntryPreloaderRemovalTimer();
     entryPreloaderLeft = true;
     const useCurtain = loader.dataset.useCurtain === "1";
     if (useCurtain) {
@@ -86,10 +121,12 @@
       loader.classList.add("is-simple-leaving");
     }
     const removeAfter = useCurtain ? 1120 : 220;
-    window.setTimeout(() => {
+    entryPreloaderRemovalTimer = window.setTimeout(() => {
+      entryPreloaderRemovalTimer = null;
       loader.classList.add("is-gone");
       if (loader.parentNode) loader.parentNode.removeChild(loader);
-      entryPreloader = null;
+      if (entryPreloader === loader) entryPreloader = null;
+      entryPreloaderLeft = false;
     }, removeAfter);
   };
 
@@ -1374,16 +1411,23 @@
     }
     // A Tilda page can be restored from BFCache with the previous loader state.
     // Never keep a completed/half-left loader over a newly restored route.
+    clearEntryPreloaderRemovalTimer();
+    clearEntryPreloaderSafetyTimer();
     loader.classList.remove("is-leaving", "is-gone", "is-simple-leaving");
-    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
+    // Use the existing LK curtain for every LK entry, regardless of auth state.
+    loader.dataset.useCurtain = "1";
     entryPreloader = loader;
     entryPreloaderLeft = false;
+    armEntryPreloaderSafetyTimer(loader);
   };
 
   const init = async () => {
     const generation = ++initGeneration;
     const route = ensureKnownRoute();
-    if (!route) return;
+    if (!route) {
+      hideEntryPreloader();
+      return;
+    }
 
     // The Tilda header must stay enabled on every LK page because the
     // contact popup lives in the same global Tilda record. Only the visual

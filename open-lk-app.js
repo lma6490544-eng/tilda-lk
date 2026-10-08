@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=41";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=40";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=43";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=42";
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
 

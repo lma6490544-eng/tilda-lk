@@ -1452,34 +1452,76 @@
     window.__OPEN_LK_REAL_STATE__ = realState?.demo && !isLoginPage() ? null : realState;
 
     const ensureCurrentCss = () => new Promise((resolve) => {
-      const existing = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find((link) => {
+      const target = new URL(CSS_URL, window.location.href);
+      const head = document.head || document.documentElement;
+
+      const isTargetStylesheet = (link) => {
         try {
           const href = new URL(link.href, window.location.href);
-          const target = new URL(CSS_URL, window.location.href);
           return href.origin === target.origin && href.pathname === target.pathname;
         } catch {
           return false;
         }
-      });
-      if (existing) {
-        resolve();
-        return;
-      }
+      };
 
-      const styleLink = document.createElement("link");
-      styleLink.rel = "stylesheet";
-      styleLink.href = CSS_URL;
+      const removeLegacyStylesheets = () => {
+        Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+          .filter(isTargetStylesheet)
+          .forEach((link) => link.remove());
+
+        const injected = document.getElementById("open-lk-external-css");
+        if (injected) injected.remove();
+      };
+
       let settled = false;
+      let timer = null;
       const finish = () => {
         if (settled) return;
         settled = true;
-        window.clearTimeout(timer);
+        if (timer) window.clearTimeout(timer);
         resolve();
       };
-      const timer = window.setTimeout(finish, CSS_LOAD_TIMEOUT_MS);
-      styleLink.addEventListener("load", finish, { once: true });
-      styleLink.addEventListener("error", finish, { once: true });
-      (document.head || document.documentElement).appendChild(styleLink);
+
+      // Always re-read the current GitHub Pages CSS instead of accepting a stale
+      // stylesheet link that may have been left by an earlier app version.
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      timer = window.setTimeout(() => {
+        if (controller) controller.abort();
+        finish();
+      }, CSS_LOAD_TIMEOUT_MS);
+
+      fetch(CSS_URL, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        signal: controller ? controller.signal : undefined
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error(`CSS request failed: ${response.status}`);
+          return response.text();
+        })
+        .then((cssText) => {
+          if (settled) return;
+          removeLegacyStylesheets();
+          const style = document.createElement("style");
+          style.id = "open-lk-external-css";
+          style.textContent = cssText;
+          head.appendChild(style);
+          finish();
+        })
+        .catch(() => {
+          // If fetch is unavailable/blocked, keep the page usable and fall back
+          // to a normal stylesheet link rather than leaving the app waiting.
+          if (settled) return;
+          const existing = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find(isTargetStylesheet);
+          if (!existing) {
+            const styleLink = document.createElement("link");
+            styleLink.rel = "stylesheet";
+            styleLink.href = CSS_URL;
+            head.appendChild(styleLink);
+          }
+          finish();
+        });
     });
 
     // Final tariff card spacing guard. This is intentionally injected after the page-local Tilda styles

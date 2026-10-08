@@ -1321,33 +1321,6 @@
     document.head.appendChild(script);
   };
 
-  const openDemo = () => {
-    sessionStorage.setItem(DEMO_KEY, "1");
-    window.__OPEN_LK_DEMO_MODE__ = true;
-    window.location.assign("/subscriptions");
-  };
-
-  const loadDemoUi = ({ onReady } = {}) => {
-    window.__OPEN_LK_OPEN_DEMO__ = openDemo;
-    window.__OPEN_LK_DEMO_MODE__ = true;
-    window.__OPEN_LK_REAL_MODE__ = false;
-    window.__OPEN_LK_REAL_ACTIONS__ = null;
-    sessionStorage.setItem(DEMO_KEY, "1");
-    loadUi({
-      demo: true,
-      session: !isLoginPage(),
-      plans: [],
-      subs: [],
-      profile: {},
-      payers: [],
-      cards: [],
-      orders: [],
-      tickets: [],
-      events: [],
-      schema: 2,
-      clock: Date.now(),
-    }, { onReady });
-  };
 
   const redirectToLogin = () => {
     if (!isLoginPage()) window.location.replace("/login");
@@ -1386,14 +1359,29 @@
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
+      // Login is available only through the real authentication API.
+      // Never load the old demo scenario on the authorization page.
+      clearDemoMode();
       bootstrapEntryPreloader();
-      loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
+      loadUi({
+        demo: false,
+        session: false,
+        profile: {},
+        payers: [],
+        cards: [],
+        subs: [],
+        orders: [],
+        tickets: [],
+        events: [],
+        schema: 2,
+        clock: Date.now(),
+      }, { onReady: hideEntryPreloaderAfterPaint });
       return;
     }
 
     if (demoMode) {
-      bootstrapEntryPreloader();
-      loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
+      clearDemoMode();
+      redirectToLogin();
       return;
     }
 

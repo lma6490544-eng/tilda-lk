@@ -14,8 +14,11 @@
 }
 .modal:has(.payer-details) .payer-details{min-width:0;overflow:hidden}
 .modal:has(.payer-details) .product-facts{
-  grid-template-columns:fit-content(220px) fit-content(220px) fit-content(280px) fit-content(360px);
+  grid-template-columns:repeat(4,minmax(180px,fit-content(280px)));
+  grid-template-rows:repeat(3,auto);
+  grid-auto-flow:column;
   justify-content:space-between;
+  align-items:start;
   width:100%;
   max-width:100%;
 }
@@ -30,9 +33,7 @@
 }
 @media(max-width:900px){
   .modal:has(.payer-details){width:calc(100vw - 32px);max-width:calc(100vw - 32px)}
-  .modal:has(.payer-details) .product-facts{grid-template-columns:1fr 1fr}
 }
 @media(max-width:560px){
   .modal:has(.payer-details){width:calc(100vw - 24px);max-width:calc(100vw - 24px);padding:18px}
-  .modal:has(.payer-details) .product-facts{grid-template-columns:1fr}
 }

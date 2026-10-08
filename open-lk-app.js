@@ -241,9 +241,10 @@
 
   const auth = {
     async login({ login, password }) {
-      const normalizedLogin = /^\+?\d[\d\s()\-]+$/.test(login)
-        ? apiPhone(login)
-        : login;
+      const normalizedLogin = apiPhone(login);
+      if (!/^\+7\d{10}$/.test(normalizedLogin)) {
+        throw new Error("Некорректный номер телефона.");
+      }
       const data = await request("POST", "/auth/login", {
         login: normalizedLogin,
         password,
@@ -1317,6 +1318,15 @@
       styleLink.rel = "stylesheet";
       styleLink.href = CSS_URL;
       document.head.appendChild(styleLink);
+    }
+
+    // Final tariff card spacing guard. This is intentionally injected after the page-local Tilda styles
+    // so a stale/embedded page rule cannot override the requested final values.
+    if (!document.getElementById("open-lk-final-tariff-card-style")) {
+      const tariffStyle = document.createElement("style");
+      tariffStyle.id = "open-lk-final-tariff-card-style";
+      tariffStyle.textContent = ".tariff-card>p{min-height:50px !important;margin:10px 0 0 !important;font-size:12px;flex:1}";
+      document.head.appendChild(tariffStyle);
     }
     if (realState?.demo) {
       delete window.__OPEN_LK_REAL_PLANS__;

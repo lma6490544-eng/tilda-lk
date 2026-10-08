@@ -82,7 +82,9 @@ Frontend автоматически скрывает только визуаль
 Тарифы с `totalAmountKopeks === 0` показывают кнопку `По запросу`; она открывает существующий Tilda contact popup. Отдельная API-ручка обратной связи для этого сценария не используется.
 
 
-## v56
+## v58
+- Fixed the missed page-local Tilda CSS override for `.tariff-card>p`; there is now exactly one rule with `margin:10px 0 0` and `min-height:50px`.
+- Negative tariff prices (`< 0`) remain "По запросу"; `0` is a normal price.
 - Tariff request mode: any negative price (`< 0`) is "По запросу"; `0` is a normal price.
 - Final `.tariff-card>p` rule: `min-height:50px; margin:10px 0 0; font-size:12px; flex:1`.
 - Registration backend validation for already registered users is shown in the existing red form error.

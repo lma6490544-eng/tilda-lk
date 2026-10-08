@@ -185,6 +185,10 @@
         data?.errorCause ||
         data?.message ||
         data?.detail ||
+        data?.error?.message ||
+        data?.data?.errorCause ||
+        data?.data?.message ||
+        data?.errors?.[0]?.message ||
         data?.error ||
         `Ошибка API: ${response.status}`;
       const apiCode = data?.errorCode ? ` (${data.errorCode})` : "";
@@ -217,6 +221,24 @@
 
   const clearDemoMode = () => sessionStorage.removeItem(DEMO_KEY);
 
+  const throwRegistrationValidation = (data) => {
+    const status = String(data?.status || data?.result?.status || data?.data?.status || "").trim();
+    const code = String(data?.errorCode || data?.code || data?.result?.errorCode || data?.result?.code || data?.data?.errorCode || data?.data?.code || "").trim();
+    const message = String(data?.errorCause || data?.message || data?.detail || data?.error || data?.result?.message || data?.data?.message || "").trim();
+    const combined = `${status} ${code} ${message} ${JSON.stringify(data || {})}`;
+    if (
+      /USER_ALREADY_REGISTERED|ALREADY_REGISTERED|ALREADY_EXISTS/i.test(combined) ||
+      /пользователь\s+зарегистрирован(?:\s+в\s+системе)?/i.test(combined) ||
+      /user[^\n]{0,80}(already\s+registered|already\s+exists)/i.test(combined)
+    ) {
+      const error = new Error("Пользователь зарегистрирован в системе");
+      error.code = code;
+      error.apiResponse = data;
+      throw error;
+    }
+    return data;
+  };
+
   const auth = {
     async login({ login, password }) {
       const normalizedLogin = /^\+?\d[\d\s()\-]+$/.test(login)
@@ -233,9 +255,10 @@
     },
 
     async sendRegisterPin({ login }) {
-      return request("POST", "/auth/user/phone/pin", {
+      const data = await request("POST", "/auth/user/phone/pin", {
         login: apiPhone(login),
       }, {}, false);
+      return throwRegistrationValidation(data);
     },
 
     async confirmRegister({ login, password, code, name, surname, mail }) {
@@ -258,6 +281,7 @@
         politicAgreements: true,
         hash: crypto.randomUUID(),
       }, {}, false);
+      throwRegistrationValidation(data);
       saveToken(extractToken(data));
 
       const createdUser = await request("GET", "/lk/user");

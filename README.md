@@ -80,3 +80,9 @@ Tilda Header должен быть включён на всех страница
 Frontend автоматически скрывает только визуальный контейнер `#meta-global-header` через CSS. Глобальный блок с контактным popup (`#mc-popup`) не скрывается и остаётся доступным в DOM.
 
 Тарифы с `totalAmountKopeks === 0` показывают кнопку `По запросу`; она открывает существующий Tilda contact popup. Отдельная API-ручка обратной связи для этого сценария не используется.
+
+
+## v56
+- Tariff request mode: any negative price (`< 0`) is "По запросу"; `0` is a normal price.
+- Final `.tariff-card>p` rule: `min-height:50px; margin:10px 0 0; font-size:12px; flex:1`.
+- Registration backend validation for already registered users is shown in the existing red form error.

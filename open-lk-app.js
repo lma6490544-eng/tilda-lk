@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=30";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=30";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=31";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=31";
   const DEMO_KEY = "openLkDemoMode";
 
   const ENTRY_PRELOADER_STYLE = `
@@ -1393,6 +1393,14 @@
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
+      // Restore an existing real session when the user returns from the public site.
+      // The auth token is already persisted in localStorage; /subscriptions will
+      // validate it and force logout if the backend rejects the session.
+      if (getToken()) {
+        window.location.replace("/subscriptions");
+        return;
+      }
+
       // Login is available only through the real authentication API.
       // Never load the old demo scenario on the authorization page.
       clearDemoMode();

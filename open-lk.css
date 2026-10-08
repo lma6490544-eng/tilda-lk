@@ -6,7 +6,7 @@
 
 .tariff-object{color:#fff;font-size:14px;line-height:1.4;margin:8px 0}
 
-/* v55 requisites popup: size columns to content, cap popup width, ellipsis on overflow */
+/* v59 requisites popup: ordered 4-column grid, content-sized tracks with min/max caps, responsive 2/1 columns */
 .modal:has(.payer-details){
   width:min(1080px,calc(100vw - 48px));
   max-width:calc(100vw - 48px);
@@ -15,8 +15,7 @@
 .modal:has(.payer-details) .payer-details{min-width:0;overflow:hidden}
 .modal:has(.payer-details) .product-facts{
   grid-template-columns:repeat(4,minmax(180px,fit-content(280px)));
-  grid-template-rows:repeat(3,auto);
-  grid-auto-flow:column;
+  grid-auto-flow:row;
   justify-content:space-between;
   align-items:start;
   width:100%;
@@ -33,7 +32,15 @@
 }
 @media(max-width:900px){
   .modal:has(.payer-details){width:calc(100vw - 32px);max-width:calc(100vw - 32px)}
+  .modal:has(.payer-details) .product-facts{
+    grid-template-columns:repeat(2,minmax(180px,fit-content(280px)));
+  }
+  .modal:has(.payer-details) .product-facts>div{border-right:0;padding-right:0}
+  .modal:has(.payer-details) .product-facts>div:nth-child(odd){border-right:1px solid #f8f5f10a;padding-right:12px}
 }
 @media(max-width:560px){
   .modal:has(.payer-details){width:calc(100vw - 24px);max-width:calc(100vw - 24px);padding:18px}
+  .modal:has(.payer-details) .product-facts{grid-template-columns:1fr}
+  .modal:has(.payer-details) .product-facts>div,
+  .modal:has(.payer-details) .product-facts>div:nth-child(odd){border-right:0;padding-right:0}
 }

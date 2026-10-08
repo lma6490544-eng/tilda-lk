@@ -88,3 +88,9 @@ Frontend автоматически скрывает только визуаль
 - Tariff request mode: any negative price (`< 0`) is "По запросу"; `0` is a normal price.
 - Final `.tariff-card>p` rule: `min-height:50px; margin:10px 0 0; font-size:12px; flex:1`.
 - Registration backend validation for already registered users is shown in the existing red form error.
+
+## v59
+- Requisites popup always renders the 12 requested payer fields in a fixed order.
+- Requisites grid: 4 columns on desktop, 2 on tablet, 1 on narrow screens.
+- Requisites columns use content-sized tracks with minimum/maximum widths; long values are clipped with an ellipsis.
+- Returning to `/login` with an existing stored auth token redirects directly to `/subscriptions` without repeated authorization.

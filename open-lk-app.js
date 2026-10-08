@@ -4,8 +4,8 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=43";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=42";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js";
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css";
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
 
@@ -34,6 +34,7 @@
   let entryPreloaderSafetyTimer = null;
   let entryPreloaderRemovalTimer = null;
   const ENTRY_PRELOADER_SAFETY_MS = 12000;
+  const CSS_LOAD_TIMEOUT_MS = 5000;
 
   const clearEntryPreloaderSafetyTimer = () => {
     if (entryPreloaderSafetyTimer !== null) {
@@ -1450,12 +1451,36 @@
     window.__OPEN_LK_REAL_ACTIONS__ = realActions;
     window.__OPEN_LK_REAL_STATE__ = realState?.demo && !isLoginPage() ? null : realState;
 
-    if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
+    const ensureCurrentCss = () => new Promise((resolve) => {
+      const existing = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).find((link) => {
+        try {
+          const href = new URL(link.href, window.location.href);
+          const target = new URL(CSS_URL, window.location.href);
+          return href.origin === target.origin && href.pathname === target.pathname;
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        resolve();
+        return;
+      }
+
       const styleLink = document.createElement("link");
       styleLink.rel = "stylesheet";
       styleLink.href = CSS_URL;
-      document.head.appendChild(styleLink);
-    }
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve();
+      };
+      const timer = window.setTimeout(finish, CSS_LOAD_TIMEOUT_MS);
+      styleLink.addEventListener("load", finish, { once: true });
+      styleLink.addEventListener("error", finish, { once: true });
+      (document.head || document.documentElement).appendChild(styleLink);
+    });
 
     // Final tariff card spacing guard. This is intentionally injected after the page-local Tilda styles
     // so a stale/embedded page rule cannot override the requested final values.
@@ -1475,22 +1500,24 @@
 
     installUiGuards();
 
-    const script = document.createElement("script");
-    script.src = UI_URL;
-    script.async = false;
-    script.onload = () => {
-      window.dispatchEvent(new CustomEvent("open-lk-real-data", { detail: realState }));
-      if (typeof onReady === "function") onReady();
-      consumePendingRegistrationToast();
-    };
-    script.onerror = () => {
-      const root = document.getElementById("root");
-      if (root) {
-        root.innerHTML = "<div style=\"padding:24px;font:16px sans-serif\">Не удалось загрузить интерфейс кабинета.</div>";
-      }
-      if (typeof onReady === "function") onReady();
-    };
-    document.head.appendChild(script);
+    ensureCurrentCss().then(() => {
+      const script = document.createElement("script");
+      script.src = UI_URL;
+      script.async = false;
+      script.onload = () => {
+        window.dispatchEvent(new CustomEvent("open-lk-real-data", { detail: realState }));
+        if (typeof onReady === "function") onReady();
+        consumePendingRegistrationToast();
+      };
+      script.onerror = () => {
+        const root = document.getElementById("root");
+        if (root) {
+          root.innerHTML = "<div style=\"padding:24px;font:16px sans-serif\">Не удалось загрузить интерфейс кабинета.</div>";
+        }
+        if (typeof onReady === "function") onReady();
+      };
+      (document.head || document.documentElement).appendChild(script);
+    });
   };
 
 

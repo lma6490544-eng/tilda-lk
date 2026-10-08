@@ -1,4 +1,4 @@
-# Open LK — Tilda / GitHub package v20
+# Open LK — Tilda / GitHub package v39
 
 Интеграция личного кабинета с OpenAPI-контрактом подписок v2.0.0 (`api(2).yaml`).
 
@@ -46,6 +46,11 @@
 Оплата идёт через `payment-quotes` → `cart-checkouts`. В браузерный запрос checkout передаётся только `quoteId` и `Idempotency-Key`; `payerUserId` из JWT frontend самостоятельно не передаёт.
 
 Статус checkout не трактуется как успешная оплата: `PAID` считается только backend-подтверждением банка.
+
+### Обратная связь
+- `POST /tech-support/feedback`
+- `message`, `timestamp` и `source` передаются как query-параметры
+- тело запроса — `multipart/form-data`; файлы в текущем ЛК не отправляются
 
 ## Заголовки
 

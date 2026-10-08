@@ -152,13 +152,14 @@
       "x-platform-version": PLATFORM_VERSION,
       ...extraHeaders,
     };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+    if (body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
     if (useAuth && token) headers.Authorization = `Bearer ${token}`;
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
       method,
       headers,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
     });
 
     const text = await response.text();
@@ -416,12 +417,23 @@
   };
 
   const feedbackApi = {
-    send: (message) =>
-      request("POST", "/tech-support/feedback", {
-        message: String(message || "").trim(),
-        timestamp: new Date().toISOString(),
+    send: (message) => {
+      const text = String(message || "").trim();
+      if (!text) throw new Error("Введите сообщение.");
+      const timestamp = new Date().toISOString();
+      const params = new URLSearchParams({
+        message: text,
+        timestamp,
         source: "web",
-      }),
+      });
+      // Backend expects multipart/form-data for this endpoint.
+      // Files are intentionally not sent; the body is an empty FormData.
+      return request(
+        "POST",
+        `/tech-support/feedback?${params.toString()}`,
+        new FormData()
+      );
+    },
   };
 
   window.__OPEN_LK_AUTH__ = auth;

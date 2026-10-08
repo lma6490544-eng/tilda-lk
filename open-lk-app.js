@@ -879,14 +879,68 @@
 
   // The public Tilda contact popup lives in the global header record.
   // On LK pages the visual header is hidden, but the popup record remains in the DOM.
-  function installLkHeaderBridge() {
-    if (document.getElementById("open-lk-header-bridge-style")) return;
+  const LK_COOKIE_DISMISSED_KEY = "open-lk-cookie-dismissed";
 
-    const style = document.createElement("style");
-    style.id = "open-lk-header-bridge-style";
-    style.textContent =
-      "#meta-global-header{display:none !important;}";
-    (document.head || document.documentElement).appendChild(style);
+  function isLkCookieDismissed() {
+    try {
+      return sessionStorage.getItem(LK_COOKIE_DISMISSED_KEY) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function markLkCookieDismissed() {
+    try {
+      sessionStorage.setItem(LK_COOKIE_DISMISSED_KEY, "1");
+    } catch (error) {}
+  }
+
+  function closeLkCookieIfDismissed() {
+    if (!isLkCookieDismissed()) return false;
+
+    const api = window.MetaCookie || window.MetaCookiePopup;
+    if (api && typeof api.close === "function") {
+      api.close();
+      return true;
+    }
+
+    return false;
+  }
+
+  function installLkHeaderBridge() {
+    if (!document.getElementById("open-lk-header-bridge-style")) {
+      const style = document.createElement("style");
+      style.id = "open-lk-header-bridge-style";
+      style.textContent =
+        "#meta-global-header{display:none !important;}" +
+        "#meta-entry-preloader{display:none !important;}";
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    if (!document.documentElement.dataset.openLkCookieBridge) {
+      document.documentElement.dataset.openLkCookieBridge = "1";
+
+      document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!target || !target.closest) return;
+        if (!target.closest("#meta-cookie [data-dismiss]")) return;
+        markLkCookieDismissed();
+      }, true);
+    }
+
+    closeLkCookieIfDismissed();
+
+    // Tilda's cookie block initializes independently and may call open()
+    // a little later. Keep checking briefly so a dismissed banner does not
+    // flash back in after an LK page transition, while manual opening still works.
+    let attempts = 0;
+    const retry = () => {
+      if (!isLkCookieDismissed()) return;
+      if (closeLkCookieIfDismissed()) return;
+      attempts += 1;
+      if (attempts < 30) window.setTimeout(retry, 100);
+    };
+    window.setTimeout(retry, 0);
   }
 
   function openPublicContactPopup(tariffName) {

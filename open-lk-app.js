@@ -8,54 +8,114 @@
   const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=30";
   const DEMO_KEY = "openLkDemoMode";
 
-  // The global Tilda Header owns the only LK preloader (#meta-preloader).
-  // The LK app never creates a second loader or injects its own preloader CSS.
-  // It only controls the already existing global loader when the UI is ready.
+  const ENTRY_PRELOADER_STYLE = `
+#meta-preloader { --mp-void:#12120f; --mp-cycle:1.15s; --mp-rgb:196 114 74; --mp-sweep:100vh; --mp-dot:14px; --mp-gap:22px; --mp-lift:-18px; position:fixed !important; inset:0 !important; width:100vw !important; z-index:2147483647 !important; pointer-events:auto !important; opacity:1 !important; visibility:visible !important; contain:strict !important; }
+#meta-preloader.is-gone { opacity:0 !important; visibility:hidden !important; pointer-events:none !important; }
+.meta-preloader__veil { position:absolute !important; inset:0 !important; background:var(--mp-void) !important; display:grid !important; place-items:center !important; clip-path:inset(0 0 0 0); }
+.meta-preloader__veil::before { content:""; position:absolute; inset:0; background:linear-gradient(to bottom,rgb(var(--mp-rgb) / .02) 0%,rgb(var(--mp-rgb) / .16) 45%,rgb(var(--mp-rgb) / .40) 100%); opacity:0; pointer-events:none; }
+.meta-preloader__edge { --mp-edge-h:clamp(120px,26vh,220px); position:absolute; left:0; right:0; top:calc(var(--mp-edge-h) / -2); height:var(--mp-edge-h); opacity:0; pointer-events:none; background:linear-gradient(to bottom,rgb(var(--mp-rgb) / 0) 0%,rgb(var(--mp-rgb) / .08) 34%,rgb(var(--mp-rgb) / .55) 48.5%,rgb(var(--mp-rgb) / .95) 50%,rgb(var(--mp-rgb) / .40) 52%,rgb(var(--mp-rgb) / .05) 68%,rgb(var(--mp-rgb) / 0) 100%); }
+#meta-preloader.is-leaving .meta-preloader__dots { opacity:0; scale:.86; transition:opacity .18s cubic-bezier(.4,0,1,1),scale .18s cubic-bezier(.4,0,1,1); }
+#meta-preloader.is-leaving .meta-preloader__veil::before { opacity:1; transition:opacity .18s linear; }
+#meta-preloader.is-leaving .meta-preloader__veil { clip-path:inset(100% 0 0 0); transition:clip-path .84s cubic-bezier(.62,0,.25,1) .26s; }
+#meta-preloader.is-leaving .meta-preloader__edge { animation:mpEdge .84s cubic-bezier(.62,0,.25,1) .26s both; }
+@keyframes mpEdge { 0%{opacity:0;transform:translateY(0)} 7%{opacity:1} 88%{opacity:1} 100%{opacity:0;transform:translateY(var(--mp-sweep))} }
+.meta-preloader__dots { display:flex !important; align-items:center !important; justify-content:center !important; gap:var(--mp-gap) !important; line-height:0 !important; opacity:1; scale:1; }
+.meta-preloader__dots i { display:block !important; width:var(--mp-dot) !important; height:var(--mp-dot) !important; flex:0 0 auto !important; border-radius:50% !important; background:var(--mp-color) !important; opacity:.25; translate:0 0; scale:1 1; will-change:opacity,translate,scale; animation-name:mpDotOpacity,mpDotTranslate,mpDotScale; animation-duration:var(--mp-cycle); animation-timing-function:linear; animation-iteration-count:var(--mp-loops, infinite); animation-delay:calc(var(--mp-index) * var(--mp-cycle) * .06818); }
+@keyframes mpDotOpacity { 0%{animation-timing-function:cubic-bezier(.4,0,.2,1);opacity:.25} 3.636%{animation-timing-function:cubic-bezier(.25,1,.5,1);opacity:.5} 13.636%{animation-timing-function:cubic-bezier(.4,0,.2,1);opacity:1} 25%{animation-timing-function:cubic-bezier(.4,0,.2,1);opacity:.45} 34.091%{opacity:.25} 100%{opacity:.25} }
+@keyframes mpDotTranslate { 0%{animation-timing-function:cubic-bezier(.4,0,.2,1);translate:0 0} 3.636%{animation-timing-function:cubic-bezier(.25,1,.5,1);translate:0 3px} 13.636%{animation-timing-function:linear(0,0.0188,0.0679,0.1374,0.2195,0.308,0.3978,0.4856,0.5686,0.6452,0.7142,0.7753,0.8283,0.8735,0.9113,0.9423,0.9671,0.9866,1.0014,1.0123,1.0198,1.0247,1.0283,1.0281,1.0268,1.025,1.0227,1.0202,1.0177,1.0152,1.0128,1.0106,1.0085,1.0068,1.0052,1.0039,1.0028,1.0018,1.0011,1.0005,1,0.9997,0.9995,0.9993,0.9992,0.9992,0.9992,0.9993,0.9993);translate:0 var(--mp-lift)} 25%{translate:0 0} 100%{translate:0 0} }
+@keyframes mpDotScale { 0%{animation-timing-function:cubic-bezier(.4,0,.2,1);scale:1 1} 3.636%{animation-timing-function:cubic-bezier(.25,1,.5,1);scale:1.15 .85} 13.636%{animation-timing-function:cubic-bezier(.45,1.45,.8,1);scale:.85 1.25} 25%{animation-timing-function:linear;scale:1.12 .88} 34.091%{scale:1 1} 100%{scale:1 1} }
+@media (max-width:768px){#meta-preloader{--mp-dot:12px;--mp-gap:18px;--mp-lift:-15px}.meta-preloader__edge{--mp-edge-h:clamp(100px,20vh,160px)}}
+@media (prefers-reduced-motion:reduce){.meta-preloader__dots i{animation:none !important;translate:0 0 !important;scale:1 1 !important;opacity:1 !important}}
+`;
+
+  let entryPreloader = null;
   let entryPreloaderLeft = false;
 
-  const getGlobalPreloader = () => document.getElementById("meta-preloader");
+  const ensureEntryPreloader = () => {
+    // Do not reuse Tilda Header's preloader. The LK owns its own stable loader.
+    const foreignLoader = document.getElementById("meta-preloader");
+    if (foreignLoader && foreignLoader !== entryPreloader && foreignLoader.dataset.openLkOwned !== "1") {
+      foreignLoader.remove();
+    }
+
+    if (entryPreloader && document.body && document.body.contains(entryPreloader)) {
+      entryPreloader.classList.remove("is-leaving", "is-gone");
+      entryPreloaderLeft = false;
+      return entryPreloader;
+    }
+    if (!document.getElementById("meta-entry-preloader-style") && document.head) {
+      const style = document.createElement("style");
+      style.id = "meta-entry-preloader-style";
+      style.textContent = ENTRY_PRELOADER_STYLE;
+      document.head.appendChild(style);
+    }
+    if (!document.body) return null;
+    const loader = document.createElement("div");
+    loader.id = "meta-preloader";
+    loader.dataset.openLkOwned = "1";
+    loader.setAttribute("role", "status");
+    loader.setAttribute("aria-label", "Загрузка сайта МЕТА");
+    loader.style.setProperty("--mp-loops", "infinite");
+    loader.style.setProperty("--mp-cycle", "1.15s");
+    loader.style.setProperty("--mp-rgb", "196 114 74");
+    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
+    loader.innerHTML = '<div class="meta-preloader__veil"><span class="meta-preloader__dots" aria-hidden="true">' +
+      '<i style="--mp-color:#DCA028;--mp-index:0"></i>' +
+      '<i style="--mp-color:#6155A9;--mp-index:1"></i>' +
+      '<i style="--mp-color:#C4724A;--mp-index:2"></i>' +
+      '<i style="--mp-color:#20B2C9;--mp-index:3"></i>' +
+      '<i style="--mp-color:#3C5CA7;--mp-index:4"></i>' +
+      '</span></div><div class="meta-preloader__edge" aria-hidden="true"></div>';
+    document.body.appendChild(loader);
+    entryPreloader = loader;
+    entryPreloaderLeft = false;
+    return loader;
+  };
 
   const hideEntryPreloader = () => {
-    const loader = getGlobalPreloader();
+    const loader = entryPreloader && document.body && document.body.contains(entryPreloader)
+      ? entryPreloader
+      : document.getElementById("meta-preloader");
     if (!loader || entryPreloaderLeft) return;
-
     entryPreloaderLeft = true;
-    loader.style.setProperty("--mp-sweep", loader.offsetHeight + "px");
-    loader.classList.add("is-leaving");
-
-    const removeAfter = 1120;
+    const useCurtain = loader.dataset.useCurtain === "1";
+    if (useCurtain) {
+      loader.style.setProperty("--mp-sweep", loader.offsetHeight + "px");
+      loader.classList.add("is-leaving");
+    } else {
+      loader.classList.add("is-simple-leaving");
+    }
+    const removeAfter = useCurtain ? 1120 : 220;
     window.setTimeout(() => {
       loader.classList.add("is-gone");
       if (loader.parentNode) loader.parentNode.removeChild(loader);
+      entryPreloader = null;
     }, removeAfter);
   };
 
-  // Compatibility hooks for the rest of the LK app. They intentionally do not
-  // create a loader: the global Header is the single source of truth.
-  window.__OPEN_LK_SHOW_PRELOADER__ = () => getGlobalPreloader();
+  window.__OPEN_LK_SHOW_PRELOADER__ = () => ensureEntryPreloader();
   window.__OPEN_LK_HIDE_PRELOADER__ = () => hideEntryPreloader();
+
+  const bootstrapEntryPreloader = () => {
+    document.documentElement.classList.remove("mp-hold");
+    return ensureEntryPreloader();
+  };
 
   const hideEntryPreloaderAfterPaint = () => {
     const startedAt = Date.now();
     const MAX_WAIT_MS = 8000;
-
     const waitForUi = () => {
       const root = document.getElementById("root");
       if (root && root.firstElementChild) {
-        window.requestAnimationFrame(() =>
-          window.requestAnimationFrame(hideEntryPreloader)
-        );
+        window.requestAnimationFrame(() => window.requestAnimationFrame(hideEntryPreloader));
         return;
       }
-
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
         hideEntryPreloader();
         return;
       }
-
       window.requestAnimationFrame(waitForUi);
     };
-
     window.requestAnimationFrame(waitForUi);
   };
 
@@ -828,36 +888,8 @@
 
 
   // The public Tilda contact popup lives in the global header record.
-  // On LK pages the visual header is hidden, but the popup record remains in the DOM.
-  const LK_COOKIE_DISMISSED_KEY = "open-lk-cookie-dismissed";
-
-  function isLkCookieDismissed() {
-    try {
-      return sessionStorage.getItem(LK_COOKIE_DISMISSED_KEY) === "1";
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function markLkCookieDismissed() {
-    try {
-      sessionStorage.setItem(LK_COOKIE_DISMISSED_KEY, "1");
-    } catch (error) {}
-  }
-
-  function closeLkCookieIfDismissed() {
-    if (!isLkCookieDismissed()) return false;
-    document.documentElement.setAttribute("data-open-lk-cookie-dismissed", "1");
-
-    const api = window.MetaCookie || window.MetaCookiePopup;
-    if (api && typeof api.close === "function") {
-      api.close();
-      return true;
-    }
-
-    return false;
-  }
-
+  // On LK pages the visual header is hidden. The cookie banner is always
+  // hidden in LK and is deliberately not wired into the LK app state.
   function installLkHeaderBridge() {
     if (!document.getElementById("open-lk-header-bridge-style")) {
       const style = document.createElement("style");
@@ -865,60 +897,18 @@
       style.textContent =
         "#meta-global-header{display:none !important;}" +
         "#meta-entry-preloader{display:none !important;}" +
-        "html[data-open-lk-cookie-dismissed=\"1\"] #meta-cookie{display:none !important;visibility:hidden !important;pointer-events:none !important;}";
+        "#meta-cookie,#meta-cookie.is-open{display:none !important;visibility:hidden !important;opacity:0 !important;pointer-events:none !important;}";
       (document.head || document.documentElement).appendChild(style);
     }
 
-    if (!document.documentElement.dataset.openLkCookieBridge) {
-      document.documentElement.dataset.openLkCookieBridge = "1";
-
-      const syncCookieDismissal = () => {
-        if (!isLkCookieDismissed()) return;
-        document.documentElement.setAttribute("data-open-lk-cookie-dismissed", "1");
-        const cookie = document.getElementById("meta-cookie");
-        if (cookie) {
-          cookie.classList.remove("is-open");
-          cookie.setAttribute("inert", "");
-        }
-      };
-
-      document.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!target || !target.closest) return;
-        if (!target.closest("#meta-cookie [data-dismiss]")) return;
-        markLkCookieDismissed();
-        syncCookieDismissal();
-      }, true);
-
-      document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        const cookie = document.getElementById("meta-cookie");
-        if (!cookie || !cookie.classList.contains("is-open")) return;
-        markLkCookieDismissed();
-        syncCookieDismissal();
-      }, true);
-
-      const observer = new MutationObserver(() => {
-        if (!isLkCookieDismissed()) return;
-        syncCookieDismissal();
-      });
-      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "aria-hidden", "inert"] });
-      window.__OPEN_LK_COOKIE_OBSERVER__ = observer;
-      syncCookieDismissal();
+    // Remove an already-open banner once. From this point CSS keeps it hidden,
+    // without observers, timers, storage flags, or click interception.
+    const cookie = document.getElementById("meta-cookie");
+    if (cookie) {
+      cookie.classList.remove("is-open");
+      cookie.setAttribute("inert", "");
+      cookie.setAttribute("aria-hidden", "true");
     }
-
-    closeLkCookieIfDismissed();
-
-    // Tilda's cookie block initializes independently and may call open() later.
-    // The CSS guard + observer prevent a dismissed banner from flashing back in.
-    let attempts = 0;
-    const retry = () => {
-      if (!isLkCookieDismissed()) return;
-      if (closeLkCookieIfDismissed()) return;
-      attempts += 1;
-      if (attempts < 30) window.setTimeout(retry, 100);
-    };
-    window.setTimeout(retry, 0);
   }
 
   function openPublicContactPopup(tariffName) {
@@ -1356,9 +1346,19 @@
   let initGeneration = 0;
 
   const resetStalePreloaderForCurrentPage = () => {
-    const loader = getGlobalPreloader();
+    const loader = document.getElementById("meta-preloader");
     if (!loader) return;
+    if (loader.dataset.openLkOwned !== "1") {
+      loader.remove();
+      entryPreloader = null;
+      entryPreloaderLeft = false;
+      return;
+    }
+    // A Tilda page can be restored from BFCache with the previous loader state.
+    // Never keep a completed/half-left loader over a newly restored route.
     loader.classList.remove("is-leaving", "is-gone", "is-simple-leaving");
+    loader.dataset.useCurtain = isLoginPage() ? "1" : "0";
+    entryPreloader = loader;
     entryPreloaderLeft = false;
   };
 
@@ -1375,11 +1375,13 @@
     const demoMode = sessionStorage.getItem(DEMO_KEY) === "1";
 
     if (isLoginPage()) {
+      bootstrapEntryPreloader();
       loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
       return;
     }
 
     if (demoMode) {
+      bootstrapEntryPreloader();
       loadDemoUi({ onReady: hideEntryPreloaderAfterPaint });
       return;
     }
@@ -1389,6 +1391,7 @@
       return;
     }
 
+    bootstrapEntryPreloader();
 
     try {
       const realState = await loadRealState();
@@ -1443,6 +1446,8 @@
     bootCurrentPage();
   });
 
+  // Create the entry loader as early as possible, before Tilda/React can paint an empty page.
+  bootstrapEntryPreloader();
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bootCurrentPage, { once: true });

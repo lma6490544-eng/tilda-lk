@@ -630,6 +630,7 @@
     tier: tariff?.plan?.name || "",
     price: Number(tariff?.totalAmountKopeks || 0) / 100,
     description: tariff?.product?.description || "",
+    info: tariff?.product?.info || "",
     features: [],
     icon: tariff?.product?.iconKey || "file",
     tariffId: tariff?.tariffId || null,

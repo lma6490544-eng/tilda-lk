@@ -8,6 +8,15 @@
   const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css";
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
+  const POST_AUTH_ROUTE_KEY = "meta_lk_post_auth_route";
+  const PENDING_TOAST_KEY = "meta_lk_pending_toast";
+  const TARIFF_INTENT_KEY = "meta_lk_tariff_purchase_intent";
+  const SUPPORTED_TARIFF_CODES = new Set([
+    "AGENTPTO_STANDARD_1M",
+    "METAPRORAB_FREE_1M",
+    "METAPRORAB_PRO_1M",
+    "METAPRORAB_MAX_1M",
+  ]);
 
   const ENTRY_PRELOADER_STYLE = `
 #meta-preloader { --mp-void:#12120f; --mp-cycle:1.15s; --mp-rgb:196 114 74; --mp-sweep:100vh; --mp-dot:14px; --mp-gap:22px; --mp-lift:-18px; position:fixed !important; inset:0 !important; width:100vw !important; z-index:2147483647 !important; pointer-events:auto !important; opacity:1 !important; visibility:visible !important; contain:strict !important; }
@@ -1254,6 +1263,113 @@
     },
   };
 
+  const showPurchaseIntentMessage = (message) => {
+    // This runs both before and after the React bundle is mounted. Reusing the
+    // existing toast class keeps errors visible without introducing another UI.
+    const old = document.querySelector(".open-lk-purchase-intent-toast");
+    if (old) old.remove();
+    const node = document.createElement("div");
+    node.className = "toast open-lk-purchase-intent-toast";
+    node.setAttribute("role", "status");
+    node.textContent = message;
+    document.body.appendChild(node);
+    window.setTimeout(() => { if (node.isConnected) node.remove(); }, 5000);
+  };
+
+  const readTariffIntent = () => {
+    try {
+      const intent = JSON.parse(sessionStorage.getItem(TARIFF_INTENT_KEY) || "null");
+      return intent && SUPPORTED_TARIFF_CODES.has(intent.tariffCode) ? intent : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const clearTariffIntent = () => {
+    try { sessionStorage.removeItem(TARIFF_INTENT_KEY); } catch {}
+  };
+
+  const captureTariffIntentFromLoginUrl = () => {
+    if (!isLoginPage()) return;
+    let tariffCode = "";
+    try { tariffCode = new URLSearchParams(window.location.search).get("tariff")?.trim() || ""; } catch {}
+    if (!tariffCode) return;
+
+    // Do not retain unknown values: they cannot become valid after authentication.
+    if (!SUPPORTED_TARIFF_CODES.has(tariffCode)) {
+      try { sessionStorage.setItem(PENDING_TOAST_KEY, "Выбранный тариф недоступен."); } catch {}
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tariff");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(TARIFF_INTENT_KEY, JSON.stringify({ tariffCode, periodMonths: 1 }));
+      // The login UI always first navigates to /subscriptions. This one-shot marker
+      // moves that transition to the tariffs page after authentication.
+      sessionStorage.setItem(POST_AUTH_ROUTE_KEY, "/tariffs");
+    } catch {}
+
+    // The intent is now in session storage, so the address can safely be shared
+    // neither with a later internal route nor reprocessed on React remount.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("tariff");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const applyTariffIntentToExistingCart = (realState) => {
+    const intent = readTariffIntent();
+    if (!intent) return;
+    if (!realState?.organizationId) {
+      showPurchaseIntentMessage("Не удалось определить организацию. Выбранный тариф сохранён, попробуйте обновить страницу.");
+      return;
+    }
+    if (realState?.apiErrors?.tariffs) {
+      showPurchaseIntentMessage("Не удалось загрузить тарифы. Выбранный тариф сохранён, попробуйте обновить страницу.");
+      return;
+    }
+
+    const tariffs = Array.isArray(realState?.tariffsByPeriod?.[1]) ? realState.tariffsByPeriod[1] : [];
+    const tariffIndex = tariffs.findIndex((tariff) => tariff?.code === intent.tariffCode || tariff?.tariffCode === intent.tariffCode);
+    if (tariffIndex < 0) {
+      clearTariffIntent();
+      showPurchaseIntentMessage("Выбранный тариф отсутствует в актуальном списке тарифов.");
+      return;
+    }
+    const tariff = tariffs[tariffIndex];
+    if (tariff.canPurchase !== true || tariff.priceStatus !== "LIVE") {
+      clearTariffIntent();
+      showPurchaseIntentMessage("Выбранный тариф сейчас недоступен для покупки.");
+      return;
+    }
+
+    // The React bundle owns the cart state. Click its existing tariff action
+    // rather than keeping a second cart or constructing a checkout ourselves.
+    const addToExistingCart = () => {
+      const cards = Array.from(document.querySelectorAll(".tariff-grid .tariff-card"));
+      const card = cards[tariffIndex];
+      const button = card?.querySelector("button");
+      if (!button) return false;
+      if (!card.classList.contains("selected")) button.click();
+      clearTariffIntent();
+      showPurchaseIntentMessage("Тариф добавлен в корзину.");
+      return true;
+    };
+
+    if (addToExistingCart()) return;
+    const observer = new MutationObserver(() => {
+      if (addToExistingCart()) observer.disconnect();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.setTimeout(() => {
+      observer.disconnect();
+      if (readTariffIntent()) {
+        showPurchaseIntentMessage("Не удалось открыть корзину. Выбранный тариф сохранён, попробуйте обновить страницу.");
+      }
+    }, 5000);
+  };
+
   const getRoute = () => {
     const path = window.location.pathname.replace(/\/+$/, "") || "/";
     if (path === "/login") return "login";
@@ -1407,9 +1523,6 @@
     new MutationObserver(addPasswordField).observe(document.documentElement, { childList: true, subtree: true });
     window.addEventListener("open-lk-real-data", addPasswordField);
   };
-
-  const POST_AUTH_ROUTE_KEY = "meta_lk_post_auth_route";
-  const PENDING_TOAST_KEY = "meta_lk_pending_toast";
 
   const consumePendingRegistrationToast = () => {
     let message = "";
@@ -1600,6 +1713,8 @@
       return;
     }
 
+    captureTariffIntentFromLoginUrl();
+
     // The Tilda header must stay enabled on every LK page because the
     // contact popup lives in the same global Tilda record. Only the visual
     // header mount is hidden; the popup record remains available in the DOM.
@@ -1652,10 +1767,7 @@
     // LK sections. The marker is one-shot and only affects the intermediate
     // /subscriptions navigation produced by the shared auth callback.
     if (window.location.pathname.replace(/\/+$/, "") === "/subscriptions") {
-      let postAuthRoute = "";
-      try {
-        postAuthRoute = sessionStorage.getItem(POST_AUTH_ROUTE_KEY) || "";
-      } catch {}
+      const postAuthRoute = consumePostAuthRoute();
       if (postAuthRoute === "/tariffs") {
         window.location.replace("/tariffs");
         return;
@@ -1668,7 +1780,12 @@
     try {
       const realState = await loadRealState();
       window.__OPEN_LK_DEMO_MODE__ = false;
-      loadUi(realState, { onReady: hideEntryPreloaderAfterPaint });
+      loadUi(realState, {
+        onReady: () => {
+          hideEntryPreloaderAfterPaint();
+          if (getRoute() === "subscriptions") applyTariffIntentToExistingCart(realState);
+        },
+      });
     } catch (error) {
       hideEntryPreloader();
       console.error("[OPEN-LK] API error:", error);

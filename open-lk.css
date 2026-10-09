@@ -391,10 +391,13 @@ small,
   background: #c4724a12
 }
 
-.product-icon.brand img {
-  width: 72%;
-  height: 72%;
-  object-fit: contain;
+.product-icon.brand svg,
+.active-sub-top .product-icon.brand svg,
+.tariff-card .product-icon.brand svg,
+.basket-item .product-icon.brand svg,
+.sub-product .product-icon.brand svg {
+  width: 50%;
+  height: 50%;
   display: block
 }
 

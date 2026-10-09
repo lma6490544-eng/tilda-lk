@@ -2,10 +2,9 @@
   "use strict";
 
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
-  const FEEDBACK_API_BASE = "https://itprorab.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const ASSET_VERSION = "20261009-9";
+  const ASSET_VERSION = "20261009-10";
   const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=" + ASSET_VERSION;
   const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=" + ASSET_VERSION;
   const DEMO_KEY = "openLkDemoMode";
@@ -269,7 +268,7 @@
     return normalized ? `+${normalized}` : "";
   };
 
-  const request = async (method, endpoint, body, extraHeaders = {}, useAuth = true, apiBase = API_BASE) => {
+  const request = async (method, endpoint, body, extraHeaders = {}, useAuth = true) => {
     const token = getToken();
     const headers = {
       accept: "application/json",
@@ -280,7 +279,7 @@
     if (body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
     if (useAuth && token) headers.Authorization = `Bearer ${token}`;
 
-    const response = await fetch(`${apiBase}${endpoint}`, {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
       method,
       headers,
       ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
@@ -590,10 +589,7 @@
       return request(
         "POST",
         `/tech-support/feedback?${params.toString()}`,
-        new FormData(),
-        {},
-        true,
-        FEEDBACK_API_BASE
+        new FormData()
       );
     },
   };

@@ -1,6 +1,7 @@
-# Open LK v76
+# Open LK — исправление повторной отправки SMS-кода
 
-Cache-busting query parameters were removed from the internal UI/CSS URLs. `open-lk-app.js` now loads `open-lk-ui.js` and `open-lk.css` directly by their stable paths.
+В форме подтверждения телефона повторная отправка кода регистрации использует API `window.__OPEN_LK_AUTH__.sendRegisterPin` и текущий номер из поля регистрации (`E.phone`). Метод отправляет `POST /v1/auth/user/phone/pin` через существующий API-адаптер и передаёт номер в формате `+7XXXXXXXXXX`.
 
-In Tilda, load the app loader without a version query as well:
-`https://lma6490544-eng.github.io/tilda-lk/open-lk-app.js`
+Кнопка блокируется на время запроса; сообщение об успехе показывается только после успешного завершения. Обработчик восстановления пароля также использует текущий номер `E.phone` и существующий API-метод.
+
+В Тильде подключайте `open-lk-app.js` как обычно.

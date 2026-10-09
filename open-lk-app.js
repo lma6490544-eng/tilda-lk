@@ -4,7 +4,7 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const ASSET_VERSION = "20261009-7";
+  const ASSET_VERSION = "20261009-3";
   const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=" + ASSET_VERSION;
   const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=" + ASSET_VERSION;
   const DEMO_KEY = "openLkDemoMode";
@@ -1437,8 +1437,6 @@
       if (!isRealMode()) return;
       const form = event.target;
       if (!(form instanceof HTMLFormElement)) return;
-      // Auth forms own their validation/submission and must never be handled as settings forms.
-      if (form.closest(".auth")) return;
 
       const bodyField = form.querySelector('textarea[name="body"]');
       const subjectField = form.querySelector('input[name="subject"]');
@@ -1513,8 +1511,6 @@
       const forms = document.querySelectorAll('form');
       for (const form of forms) {
         if (!(form instanceof HTMLFormElement)) continue;
-        // Password-field injection is for account settings only, never for auth screens.
-        if (form.closest(".auth")) continue;
         const passwordField = form.querySelector('input[name="password"]');
         const confirmField = form.querySelector('input[name="confirm"]');
         if (!passwordField || !confirmField || form.querySelector('input[name="oldPassword"]')) continue;

@@ -3829,7 +3829,11 @@ form.settings-section > button[type="submit"] {
   text-underline-offset: 2px;
 }
 .registration-consents .consent-checkbox.consent-invalid input {
-  outline: 1px solid #ff9d90;
+  outline: 1px solid #ff6b6b;
   outline-offset: 2px;
-  accent-color: #ff9d90;
+  accent-color: #ff6b6b;
+}
+.registration-consents .consent-error {
+  margin: -5px 0 12px 26px;
+  color: #ff6b6b;
 }

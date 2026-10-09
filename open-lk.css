@@ -2899,6 +2899,13 @@ footer {
   color: var(--text)
 }
 
+.tariff-caption select:disabled {
+  background-image: none !important;
+  padding-right: 12px !important;
+  opacity: 1;
+  cursor: default
+}
+
 .tariff-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3578,10 +3585,6 @@ footer {
 select option {
   background: var(--surface);
   color: var(--text)
-}
-
-.shop-content>.page-heading {
-  margin-bottom: 18px
 }
 
 .shop-content>.shop-tabs {

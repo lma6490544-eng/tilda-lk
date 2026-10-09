@@ -3813,3 +3813,27 @@ form.settings-section > button[type="submit"] {
 .shop-layout .page-heading {
   margin-bottom: 30px !important;
 }
+
+/* Registration consent checkboxes */
+.registration-consents {
+  margin: 4px 0 18px;
+}
+.registration-consents .consent-checkbox {
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.registration-consents .consent-checkbox a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.registration-consents .consent-checkbox.consent-invalid input {
+  outline: 1px solid #ff6b6b;
+  outline-offset: 2px;
+  accent-color: #ff6b6b;
+}
+.registration-consents .consent-error {
+  margin: -5px 0 12px 26px;
+  color: #ff6b6b;
+}

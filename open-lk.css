@@ -3150,13 +3150,6 @@ footer {
   font-weight: 550
 }
 
-.repeat-last {
-  margin: 20px 0 0;
-  width: 100%;
-  justify-content: center;
-  font-size: 12px
-}
-
 .basket-panel .basket-note {
   font-size: 11px;
   color: var(--muted);
@@ -3640,10 +3633,6 @@ select option {
 
 .basket-total strong {
   font-size: 22px
-}
-
-.repeat-last {
-  margin-top: 14px
 }
 
 .basket-panel .basket-note {

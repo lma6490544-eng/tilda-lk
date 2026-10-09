@@ -368,8 +368,13 @@
     },
 
     async sendRegisterPin({ login }) {
+      const normalizedLogin = apiPhone(login);
+      if (!/^\+7\d{10}$/.test(normalizedLogin)) {
+        throw new Error("Некорректный номер телефона.");
+      }
+      // Phone numbers are sent to the API in international format with a leading "+".
       const data = await request("POST", "/auth/user/phone/pin", {
-        login: apiPhone(login),
+        login: normalizedLogin,
       }, {}, false);
       return throwRegistrationValidation(data);
     },
@@ -410,7 +415,7 @@
           name: String(name || "").trim(),
           surname: String(surname || "").trim(),
           mail: String(mail || "").trim(),
-          phoneNumber: normalizePhone(phone),
+          phoneNumber: apiPhone(phone),
         },
         { "X-User-Id": createdUser.id }
       );
@@ -523,7 +528,7 @@
         ...(lastName !== undefined ? { lastName } : {}),
         ...(birthday !== undefined ? { birthday } : {}),
         ...(mail !== undefined ? { mail } : {}),
-        ...(phoneNumber !== undefined ? { phoneNumber: normalizePhone(phoneNumber) } : {}),
+        ...(phoneNumber !== undefined ? { phoneNumber: apiPhone(phoneNumber) } : {}),
       },
       { "X-User-Id": userId }
     );
@@ -1119,7 +1124,7 @@
     type: payer?.type === "company" ? "COMPANY" : "PERSON",
     name: String(payer?.name || "").trim(),
     email: String(payer?.email || "").trim(),
-    ...(payer?.phone ? { phone: String(payer.phone).trim() } : {}),
+    ...(payer?.phone ? { phone: apiPhone(payer.phone) } : {}),
     ...(payer?.inn ? { inn: String(payer.inn).trim() } : {}),
     ...(payer?.kpp ? { kpp: String(payer.kpp).trim() } : {}),
     ...(payer?.ogrn ? { ogrn: String(payer.ogrn).trim() } : {}),
@@ -1199,7 +1204,7 @@
       if (first) payload.name = first;
       if (last) payload.surname = last;
       if (email) payload.mail = email;
-      if (phone) payload.phoneNumber = phone;
+      if (phone) payload.phoneNumber = apiPhone(phone);
       const updated = await auth.updateUser(payload);
       const realState = await refreshRealState();
       window.dispatchEvent(new CustomEvent("open-lk-real-state-updated", { detail: realState }));

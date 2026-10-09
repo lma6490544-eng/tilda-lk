@@ -1834,8 +1834,13 @@
   });
 
   window.addEventListener("popstate", () => {
-    // Covers hosts that restore/navigate Tilda content without a full document load.
-    // This is internal LK navigation, so it must never create an entry curtain.
+    // The React UI owns in-app history navigation once it is mounted. Keep Back/Forward
+    // inside the existing document and avoid re-fetching the API or re-mounting the app.
+    if (typeof window.__OPEN_LK_SET_ROUTE_FROM_PATH__ === "function") {
+      window.__OPEN_LK_SET_ROUTE_FROM_PATH__();
+      return;
+    }
+    // Fallback for early navigation before the UI has mounted.
     const route = getRoute();
     if (!route) {
       ensureKnownRoute();

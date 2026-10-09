@@ -90,13 +90,13 @@
   const setPendingLkEntryCurtain = () => {
     try {
       sessionStorage.setItem(LK_ENTRY_PENDING_KEY, "1");
-    } catch {}
+    } catch { }
   };
 
   const clearPendingLkEntryCurtain = () => {
     try {
       sessionStorage.removeItem(LK_ENTRY_PENDING_KEY);
-    } catch {}
+    } catch { }
   };
 
   const shouldShowLkEntryCurtain = () => {
@@ -118,7 +118,7 @@
       // Navigation between LK pages is ordinary internal navigation: never show the
       // entry curtain there. Any other referrer means the user entered the LK.
       if (isSameOriginLkPage) return false;
-    } catch {}
+    } catch { }
 
     setPendingLkEntryCurtain();
     return true;
@@ -318,12 +318,12 @@
     typeof data === "string"
       ? data
       : data?.token ||
-        data?.access_token ||
-        data?.data?.token ||
-        data?.data?.access_token ||
-        data?.result?.token ||
-        data?.result?.access_token ||
-        "";
+      data?.access_token ||
+      data?.data?.token ||
+      data?.data?.access_token ||
+      data?.result?.token ||
+      data?.result?.access_token ||
+      "";
 
   const saveToken = (token) => {
     if (!token) throw new Error("Сервер не вернул token");
@@ -752,17 +752,17 @@
       : "paid";
     const items = Array.isArray(document?.items)
       ? document.items.map((item, index) => ({
-          id: `${document?.id || "document"}-${index}`,
-          planId: document?.planCode || "",
-          product: document?.planCode || "",
-          planName: item?.name || document?.planCode || "",
-          total: Number(item?.amountKopeks || 0) / 100,
-          months: null,
-          start: document?.bankPaidAt || document?.bankCreatedAt || null,
-          end: null,
-          serviceEnd: null,
-          act: false,
-        }))
+        id: `${document?.id || "document"}-${index}`,
+        planId: document?.planCode || "",
+        product: document?.planCode || "",
+        planName: item?.name || document?.planCode || "",
+        total: Number(item?.amountKopeks || 0) / 100,
+        months: null,
+        start: document?.bankPaidAt || document?.bankCreatedAt || null,
+        end: null,
+        serviceEnd: null,
+        act: false,
+      }))
       : [];
     return {
       id: document?.id || "",
@@ -1291,18 +1291,18 @@
   };
 
   const clearTariffIntent = () => {
-    try { sessionStorage.removeItem(TARIFF_INTENT_KEY); } catch {}
+    try { sessionStorage.removeItem(TARIFF_INTENT_KEY); } catch { }
   };
 
   const captureTariffIntentFromLoginUrl = () => {
     if (!isLoginPage()) return;
     let tariffCode = "";
-    try { tariffCode = new URLSearchParams(window.location.search).get("tariff")?.trim() || ""; } catch {}
+    try { tariffCode = new URLSearchParams(window.location.search).get("tariff")?.trim() || ""; } catch { }
     if (!tariffCode) return;
 
     // Do not retain unknown values: they cannot become valid after authentication.
     if (!SUPPORTED_TARIFF_CODES.has(tariffCode)) {
-      try { sessionStorage.setItem(PENDING_TOAST_KEY, "Выбранный тариф недоступен."); } catch {}
+      try { sessionStorage.setItem(PENDING_TOAST_KEY, "Выбранный тариф недоступен."); } catch { }
       const url = new URL(window.location.href);
       url.searchParams.delete("tariff");
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -1314,7 +1314,7 @@
       // The login UI always first navigates to /subscriptions. This one-shot marker
       // moves that transition to the tariffs page after authentication.
       sessionStorage.setItem(POST_AUTH_ROUTE_KEY, "/tariffs");
-    } catch {}
+    } catch { }
 
     // The intent is now in session storage, so the address can safely be shared
     // neither with a later internal route nor reprocessed on React remount.
@@ -1534,7 +1534,7 @@
     try {
       message = sessionStorage.getItem(PENDING_TOAST_KEY) || "";
       if (message) sessionStorage.removeItem(PENDING_TOAST_KEY);
-    } catch {}
+    } catch { }
     if (!message) return;
 
     // Use the same existing .toast visual class as all successful LK validations.
@@ -1556,7 +1556,7 @@
     try {
       route = sessionStorage.getItem(POST_AUTH_ROUTE_KEY) || "";
       if (route) sessionStorage.removeItem(POST_AUTH_ROUTE_KEY);
-    } catch {}
+    } catch { }
     return route;
   };
 

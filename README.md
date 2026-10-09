@@ -96,4 +96,4 @@ Frontend автоматически скрывает только визуаль
 - Returning to `/login` with an existing stored auth token redirects directly to `/subscriptions` without repeated authorization.
 - v70: Removed only the payer payment-method/type status span under the payer dropdown; kept dropdown, payer management, payment logic and Requisites button. Requisites is right-aligned.
 
-Registration consent layout update: checkboxes are rendered after the password confirmation field, immediately above the registration button. Consent validation is shown only in `.consent-error` inside the consent block. Asset version: `20261009-8`.
+Registration consent layout update: checkboxes are rendered after the password confirmation field, immediately above the registration button. Consent validation is shown only in `.consent-error` inside the consent block. Asset version: `20261009-9`.

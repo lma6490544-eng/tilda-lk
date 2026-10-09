@@ -3808,3 +3808,8 @@ form.settings-section > button[type="submit"] {
   margin-left: auto;
   margin-right: 0;
 }
+
+/* Force the heading spacing in the shop layout, overriding stale/competing styles. */
+.shop-layout .page-heading {
+  margin-bottom: 30px !important;
+}

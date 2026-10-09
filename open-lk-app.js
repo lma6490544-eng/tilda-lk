@@ -4,8 +4,11 @@
   const API_BASE = "https://pilot.metasymbiont.com/api/v1";
   const PLATFORM_VERSION = "web-1.0.0";
   const TOKEN_KEYS = ["tildaAuthToken", "authToken"];
-  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js";
-  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css";
+  // Bump this value whenever open-lk-ui.js or open-lk.css changes.
+  // The query string forces browsers/CDNs to request the current published assets.
+  const ASSET_VERSION = "20261009-1";
+  const UI_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk-ui.js?v=" + ASSET_VERSION;
+  const CSS_URL = "https://lma6490544-eng.github.io/tilda-lk/open-lk.css?v=" + ASSET_VERSION;
   const DEMO_KEY = "openLkDemoMode";
   const LK_ENTRY_PENDING_KEY = "openLkEntryCurtainPending";
   const POST_AUTH_ROUTE_KEY = "meta_lk_post_auth_route";

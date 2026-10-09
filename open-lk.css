@@ -3834,6 +3834,6 @@ form.settings-section > button[type="submit"] {
   accent-color: #ff6b6b;
 }
 .registration-consents .consent-error {
-  margin: 8px 0 0 26px;
+  margin: -10px 0 0 0;
   color: #ff9d90;
 }

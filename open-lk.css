@@ -835,6 +835,20 @@ small,
   border-color: #e17e6b
 }
 
+/* Read-only phone in the personal-data section: muted value, no focus ring. */
+.settings-section .field input[readonly] {
+  color: rgba(248, 245, 241, .48);
+  caret-color: transparent;
+}
+
+.settings-section .field input[readonly]:focus,
+.settings-section .field input[readonly]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+  box-shadow: none;
+  border-color: var(--border);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

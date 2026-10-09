@@ -3783,3 +3783,11 @@ select {
   background-position: right 14px center !important;
   background-size: 10px 6px !important;
 }
+
+/* Кнопка «Сохранить изменения» в форме личных данных */
+form.settings-section > button[type="submit"] {
+  margin-top: 30px;
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}

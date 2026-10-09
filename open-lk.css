@@ -2776,7 +2776,15 @@ footer {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 20px;
-  min-width: 0
+  min-width: 0;
+  cursor: pointer
+}
+
+.active-sub-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0
 }
 
 .active-sub-top {
@@ -3834,6 +3842,6 @@ form.settings-section > button[type="submit"] {
   accent-color: #ff6b6b;
 }
 .registration-consents .consent-error {
-  margin: -10px 0 0 0;
+  margin: 8px 0 0 26px;
   color: #ff9d90;
 }
